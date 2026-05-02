@@ -57,7 +57,7 @@ public class RaceTrackManager : MonoBehaviour
 
     private void OnGUI()
     {
-        GUI.Box(new Rect(16f, 16f, 360f, 140f), "Race Track");
+        GUI.Box(new Rect(16f, 16f, 360f, 172f), "Race Track");
 
         var displayedTime = raceFinished ? finishTime : raceActive ? Time.time - raceStartTime : 0f;
         GUI.Label(new Rect(28f, 46f, 320f, 24f), $"Time: {displayedTime:0.00}s");
@@ -73,6 +73,13 @@ public class RaceTrackManager : MonoBehaviour
         }
 
         GUI.Label(new Rect(28f, 118f, 332f, 24f), statusMessage);
+
+        if (!raceFinished && checkpoints.Count > 0 && nextCheckpointIndex < checkpoints.Count)
+        {
+            var nextCheckpoint = checkpoints[nextCheckpointIndex].transform.position;
+            var distance = Vector3.Distance(racer.position, nextCheckpoint);
+            GUI.Label(new Rect(28f, 142f, 332f, 24f), $"Distance: {distance:0.0}m");
+        }
     }
 
     public bool IsRacer(Collider other)
@@ -122,7 +129,6 @@ public class RaceTrackManager : MonoBehaviour
         {
             BuildTrack();
         }
-
         ResetRace(false);
     }
 
