@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.XR.Hands;
 using UnityEngine.XR.Management;
@@ -23,6 +24,8 @@ public class Travel : MonoBehaviour
     [Header("Gameplay Lock")]
     public bool canMove = true;
 
+    public event Action<Collider> TriggerEntered;
+
     private XRHandSubsystem handSubsystem;
 
     private bool hasNeutralFistPosition = false;
@@ -33,12 +36,16 @@ public class Travel : MonoBehaviour
         if (drone == null)
             drone = transform;
 
-        handSubsystem = XRGeneralSettings.Instance.Manager.activeLoader
-            .GetLoadedSubsystem<XRHandSubsystem>();
+        TryInitializeHands();
     }
 
     void Update()
     {
+        if (handSubsystem == null)
+        {
+            TryInitializeHands();
+        }
+
         if (!canMove || handSubsystem == null)
             return;
 
@@ -110,6 +117,20 @@ public class Travel : MonoBehaviour
                 drone.Rotate(Vector3.up, turnAmount * turnSpeed * Time.deltaTime, Space.World);
             }
         }
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        TriggerEntered?.Invoke(other);
+    }
+
+    private void TryInitializeHands()
+    {
+        var manager = XRGeneralSettings.Instance?.Manager;
+        if (manager?.activeLoader == null)
+            return;
+
+        handSubsystem = manager.activeLoader.GetLoadedSubsystem<XRHandSubsystem>();
     }
 
     private bool TryGetPalmPose(XRHand hand, out Pose pose)

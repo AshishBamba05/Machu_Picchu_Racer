@@ -10,15 +10,11 @@ public enum CheckpointVisualState
 [DisallowMultipleComponent]
 public class RaceCheckpoint : MonoBehaviour
 {
-    private RaceTrackManager manager;
-    private int checkpointIndex;
     private Renderer[] cachedRenderers = System.Array.Empty<Renderer>();
     private Transform wayfindingPole;
 
     public void Initialize(RaceTrackManager raceManager, int index)
     {
-        manager = raceManager;
-        checkpointIndex = index;
     }
 
     public void CacheRenderers()
@@ -63,14 +59,6 @@ public class RaceCheckpoint : MonoBehaviour
         if (wayfindingPole != null)
         {
             wayfindingPole.gameObject.SetActive(state == CheckpointVisualState.Active);
-        }
-    }
-
-    private void OnTriggerEnter(Collider other)
-    {
-        if (manager != null && manager.IsRacer(other))
-        {
-            manager.HandleCheckpointEntered(checkpointIndex);
         }
     }
 }
