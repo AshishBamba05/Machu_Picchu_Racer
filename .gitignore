@@ -74,6 +74,13 @@ sysinfo.txt
 # Mono auto generated files
 mono_crash.*
 
+# Local editor and tool caches
+.vscode/
+.clang-module-cache/
+.swift-cache/
+.swift-module-cache/
+.pdf-pages/
+
 # Builds
 *.apk
 *.aab
