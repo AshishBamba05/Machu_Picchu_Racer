@@ -803,7 +803,7 @@ public class RaceTrackManager : MonoBehaviour
         var attachedBody = racer.GetComponent<Rigidbody>();
         if (attachedBody != null)
         {
-            attachedBody.velocity = Vector3.zero;
+            attachedBody.linearVelocity = Vector3.zero;
             attachedBody.angularVelocity = Vector3.zero;
         }
     }
