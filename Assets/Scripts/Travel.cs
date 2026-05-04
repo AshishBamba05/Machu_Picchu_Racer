@@ -13,6 +13,9 @@ public class Travel : MonoBehaviour
     public float maxForwardSpeed = 8f;
     public float maxBackwardSpeed = 4f;
     public float movementDeadZone = 0.08f;
+    public float verticalSpeedMultiplier = 4f;
+    public float maxVerticalSpeed = 5f;
+    public float verticalDeadZone = 0.08f;
 
     [Header("Rotation")]
     public float turnSpeed = 80f;
@@ -65,9 +68,7 @@ public class Travel : MonoBehaviour
         bool leftFist = IsFist(leftHand, leftPalmPose.position);
         bool rightFist = IsFist(rightHand, rightPalmPose.position);
 
-        // =========================
-        // FIST FORWARD / BACKWARD MOVEMENT
-        // =========================
+        // Use the offset of both fists from their neutral pose to drive translation.
         if (leftFist && rightFist)
         {
             Vector3 fistCenter = (leftPalmPose.position + rightPalmPose.position) / 2f;
@@ -91,6 +92,13 @@ public class Travel : MonoBehaviour
 
                 drone.position += drone.forward * speed * Time.deltaTime;
             }
+
+            float verticalAmount = localOffset.y;
+            if (Mathf.Abs(verticalAmount) > verticalDeadZone)
+            {
+                float verticalSpeed = Mathf.Clamp(verticalAmount * verticalSpeedMultiplier, -maxVerticalSpeed, maxVerticalSpeed);
+                drone.position += Vector3.up * verticalSpeed * Time.deltaTime;
+            }
         }
         else
         {
@@ -98,24 +106,18 @@ public class Travel : MonoBehaviour
             hasNeutralFistPosition = false;
         }
 
-        // =========================
-        // PALM WRIST ROTATION / STEERING
-        // =========================
-        if (!leftFist && !rightFist)
+        Vector3 leftPalmUp = leftPalmPose.rotation * Vector3.up;
+        Vector3 rightPalmUp = rightPalmPose.rotation * Vector3.up;
+
+        Vector3 localLeftUp = drone.InverseTransformDirection(leftPalmUp);
+        Vector3 localRightUp = drone.InverseTransformDirection(rightPalmUp);
+
+        // Wrist rotation always contributes steering so the drone can turn while moving.
+        float turnAmount = localRightUp.x - localLeftUp.x;
+
+        if (Mathf.Abs(turnAmount) > turnDeadZone)
         {
-            Vector3 leftPalmUp = leftPalmPose.rotation * Vector3.up;
-            Vector3 rightPalmUp = rightPalmPose.rotation * Vector3.up;
-
-            Vector3 localLeftUp = drone.InverseTransformDirection(leftPalmUp);
-            Vector3 localRightUp = drone.InverseTransformDirection(rightPalmUp);
-
-            // Difference between wrist rotations acts like steering wheel turning
-            float turnAmount = localRightUp.x - localLeftUp.x;
-
-            if (Mathf.Abs(turnAmount) > turnDeadZone)
-            {
-                drone.Rotate(Vector3.up, turnAmount * turnSpeed * Time.deltaTime, Space.World);
-            }
+            drone.Rotate(Vector3.up, turnAmount * turnSpeed * Time.deltaTime, Space.World);
         }
     }
 

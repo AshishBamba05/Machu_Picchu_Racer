@@ -12,9 +12,21 @@ public class RaceCheckpoint : MonoBehaviour
 {
     private Renderer[] cachedRenderers = System.Array.Empty<Renderer>();
     private Transform wayfindingPole;
+    private RaceTrackManager raceManager;
+    private int checkpointIndex = -1;
 
     public void Initialize(RaceTrackManager raceManager, int index)
     {
+        this.raceManager = raceManager;
+        checkpointIndex = index;
+        name = $"Checkpoint {index + 1}";
+    }
+
+    public int CheckpointIndex => checkpointIndex;
+
+    public bool BelongsTo(RaceTrackManager manager)
+    {
+        return raceManager == manager;
     }
 
     public void CacheRenderers()

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using TMPro;
 using UnityEngine;
 
 [DisallowMultipleComponent]
@@ -9,11 +10,12 @@ public class RaceTrackManager : MonoBehaviour
     private const float CheckpointReachRadiusMeters = 9.144f;
     private const float RespawnHeightOffset = 0f;
     private const float CountdownDuration = 3f;
+    private const int ExternalTrackSearchDepth = 5;
 
     [Header("Track Loading")]
     [SerializeField] private string preferredTrackFileName = "competition.xyz";
     [SerializeField] private string fallbackTrackFileName = "sample_track.xyz";
-    [SerializeField] private bool allowProceduralFallback = true;
+    [SerializeField] private bool allowProceduralFallback = false;
 
     private readonly List<RaceCheckpoint> checkpoints = new();
     private readonly List<Vector3> checkpointPositions = new();
@@ -23,6 +25,8 @@ public class RaceTrackManager : MonoBehaviour
     private Travel travelController;
     private DroneViewModeController viewModeController;
     private LineRenderer pathLine;
+    private Transform hudRoot;
+    private TextMeshPro hudText;
     private Bounds courseBounds;
     private bool hasCourseBounds;
     private bool runtimePrepared;
@@ -30,6 +34,7 @@ public class RaceTrackManager : MonoBehaviour
     private bool stopwatchRunning;
     private bool raceFinished;
     private bool countdownActive;
+    private bool loadedPreferredTrack;
     private int nextCheckpointIndex;
     private int lastClearedCheckpointIndex;
     private float countdownEndTime;
@@ -66,44 +71,6 @@ public class RaceTrackManager : MonoBehaviour
         UpdateCountdown();
         UpdateCheckpointProgress();
         UpdateCourseWarning();
-    }
-
-    private void OnGUI()
-    {
-        GUI.Box(new Rect(16f, 16f, 420f, 224f), "Race Track");
-
-        var displayedTime = raceFinished
-            ? finishTime
-            : stopwatchRunning
-                ? Time.time - raceStartTime
-                : 0f;
-
-        GUI.Label(new Rect(28f, 46f, 380f, 24f), $"Track: {loadedTrackLabel}");
-        GUI.Label(new Rect(28f, 70f, 380f, 24f), $"Time: {displayedTime:0.00}s");
-        GUI.Label(
-            new Rect(28f, 94f, 380f, 24f),
-            raceFinished
-                ? "Track complete! Press R to run again."
-                : $"Next checkpoint: {Mathf.Min(nextCheckpointIndex + 1, checkpoints.Count)}/{checkpoints.Count}");
-
-        if (bestTime > 0f)
-        {
-            GUI.Label(new Rect(28f, 118f, 380f, 24f), $"Best time: {bestTime:0.00}s");
-        }
-
-        if (!raceFinished && checkpointPositions.Count > 0 && nextCheckpointIndex < checkpointPositions.Count && racer != null)
-        {
-            var distance = Vector3.Distance(racer.position, checkpointPositions[nextCheckpointIndex]);
-            GUI.Label(new Rect(28f, 142f, 380f, 24f), $"Distance to next: {distance:0.0}m");
-        }
-
-        if (countdownActive)
-        {
-            var remaining = Mathf.Max(0f, countdownEndTime - Time.time);
-            GUI.Label(new Rect(28f, 166f, 380f, 24f), $"Countdown: {Mathf.CeilToInt(remaining)}");
-        }
-
-        GUI.Label(new Rect(28f, 190f, 380f, 24f), statusMessage);
     }
 
     public bool IsRacer(Collider other)
@@ -148,6 +115,7 @@ public class RaceTrackManager : MonoBehaviour
 
         DisableConflictingLocomotion();
         EnsureRacerCollisionSetup();
+        EnsureEnvironmentCollisionSetup();
 
         travelController = racer.GetComponent<Travel>();
         if (travelController == null)
@@ -167,7 +135,45 @@ public class RaceTrackManager : MonoBehaviour
         }
 
         viewModeController.Initialize(racer, racerCamera);
+        EnsureHud();
         runtimePrepared = true;
+    }
+
+    private void EnsureHud()
+    {
+        if (hudText != null)
+        {
+            return;
+        }
+
+        hudRoot = new GameObject("Race HUD").transform;
+        hudRoot.SetParent(racerCamera.transform, false);
+        hudRoot.localPosition = new Vector3(0f, -0.18f, 0.75f);
+        hudRoot.localRotation = Quaternion.identity;
+        hudRoot.localScale = Vector3.one * 0.0016f;
+
+        var hudBackground = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        hudBackground.name = "HUD Background";
+        hudBackground.transform.SetParent(hudRoot, false);
+        hudBackground.transform.localPosition = new Vector3(0f, 0f, 0.02f);
+        hudBackground.transform.localScale = new Vector3(1.3f, 0.72f, 0.01f);
+        Destroy(hudBackground.GetComponent<Collider>());
+
+        var backgroundRenderer = hudBackground.GetComponent<MeshRenderer>();
+        var backgroundShader = Shader.Find("Unlit/Color") ?? Shader.Find("Sprites/Default");
+        backgroundRenderer.material = new Material(backgroundShader);
+        backgroundRenderer.material.color = new Color(0.03f, 0.06f, 0.08f, 0.82f);
+
+        var hudTextObject = new GameObject("HUD Text");
+        hudTextObject.transform.SetParent(hudRoot, false);
+        hudText = hudTextObject.AddComponent<TextMeshPro>();
+        hudText.alignment = TextAlignmentOptions.TopLeft;
+        hudText.fontSize = 3.2f;
+        hudText.color = Color.white;
+        hudText.enableWordWrapping = false;
+        hudText.overflowMode = TextOverflowModes.Overflow;
+        hudText.rectTransform.sizeDelta = new Vector2(1100f, 560f);
+        hudText.rectTransform.localPosition = new Vector3(-0.6f, 0.28f, 0f);
     }
 
     private void DisableConflictingLocomotion()
@@ -228,23 +234,79 @@ public class RaceTrackManager : MonoBehaviour
         rigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
     }
 
+    private void EnsureEnvironmentCollisionSetup()
+    {
+        var repairedColliders = 0;
+
+        foreach (var meshFilter in FindObjectsOfType<MeshFilter>(true))
+        {
+            if (meshFilter == null || meshFilter.sharedMesh == null)
+            {
+                continue;
+            }
+
+            var sceneObject = meshFilter.gameObject;
+            if (sceneObject == null || sceneObject.transform.IsChildOf(racer) || sceneObject.transform.IsChildOf(transform))
+            {
+                continue;
+            }
+
+            var meshCollider = sceneObject.GetComponent<MeshCollider>();
+            if (meshCollider != null)
+            {
+                if (meshCollider.sharedMesh == meshFilter.sharedMesh)
+                {
+                    continue;
+                }
+
+                meshCollider.sharedMesh = meshFilter.sharedMesh;
+                meshCollider.convex = false;
+                meshCollider.isTrigger = false;
+                repairedColliders++;
+                continue;
+            }
+
+            if (sceneObject.GetComponent<Collider>() != null)
+            {
+                continue;
+            }
+
+            meshCollider = sceneObject.AddComponent<MeshCollider>();
+            meshCollider.sharedMesh = meshFilter.sharedMesh;
+            meshCollider.convex = false;
+            meshCollider.isTrigger = false;
+            repairedColliders++;
+        }
+
+        if (repairedColliders > 0)
+        {
+            Debug.Log($"Prepared {repairedColliders} environment mesh collider(s) for crash detection.");
+        }
+    }
+
     private void LoadOrBuildTrack()
     {
         ClearTrackObjects();
+        loadedPreferredTrack = false;
 
         if (TryLoadTrackFromFile(out var points, out var trackName))
         {
             checkpointPositions.AddRange(points);
             loadedTrackLabel = trackName;
+            statusMessage = loadedPreferredTrack
+                ? "Competition track loaded."
+                : $"Loaded fallback track '{trackName}'.";
         }
         else if (allowProceduralFallback)
         {
             checkpointPositions.AddRange(BuildProceduralTrack());
             loadedTrackLabel = "Procedural fallback track";
+            statusMessage = "Competition track missing. Using procedural fallback.";
         }
         else
         {
-            statusMessage = "No .xyz track file found.";
+            loadedTrackLabel = "No track loaded.";
+            statusMessage = $"Missing required track file '{preferredTrackFileName}'.";
             return;
         }
 
@@ -253,25 +315,50 @@ public class RaceTrackManager : MonoBehaviour
 
     private bool TryLoadTrackFromFile(out List<Vector3> points, out string trackName)
     {
-        foreach (var filePath in EnumerateTrackCandidates())
+        var candidates = new List<string>(EnumerateTrackCandidates());
+
+        foreach (var filePath in candidates)
         {
-            if (!File.Exists(filePath))
+            if (!Path.GetFileName(filePath).Equals(preferredTrackFileName, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            try
+            if (TryLoadTrackFile(filePath, out points))
             {
-                points = Parse.LoadTrack(filePath, 100);
-                if (points.Count >= 2)
-                {
-                    trackName = Path.GetFileName(filePath);
-                    return true;
-                }
+                trackName = Path.GetFileName(filePath);
+                loadedPreferredTrack = true;
+                return true;
             }
-            catch (Exception exception)
+        }
+
+        foreach (var filePath in candidates)
+        {
+            if (!Path.GetFileName(filePath).Equals(fallbackTrackFileName, StringComparison.OrdinalIgnoreCase))
             {
-                Debug.LogWarning($"Unable to load track file '{filePath}': {exception.Message}");
+                continue;
+            }
+
+            if (TryLoadTrackFile(filePath, out points))
+            {
+                trackName = Path.GetFileName(filePath);
+                return true;
+            }
+        }
+
+        foreach (var filePath in candidates)
+        {
+            var fileName = Path.GetFileName(filePath);
+            if (fileName.Equals(preferredTrackFileName, StringComparison.OrdinalIgnoreCase) ||
+                fileName.Equals(fallbackTrackFileName, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (TryLoadTrackFile(filePath, out points))
+            {
+                trackName = fileName;
+                return true;
             }
         }
 
@@ -280,20 +367,55 @@ public class RaceTrackManager : MonoBehaviour
         return false;
     }
 
+    private static bool TryLoadTrackFile(string filePath, out List<Vector3> points)
+    {
+        points = null;
+
+        if (!File.Exists(filePath))
+        {
+            return false;
+        }
+
+        try
+        {
+            points = Parse.LoadTrack(filePath, 100);
+            return points.Count >= 2;
+        }
+        catch (Exception exception)
+        {
+            Debug.LogWarning($"Unable to load track file '{filePath}': {exception.Message}");
+            return false;
+        }
+    }
+
     private IEnumerable<string> EnumerateTrackCandidates()
     {
         var candidates = new List<string>();
         var searchedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var addedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         void AddFile(string path)
         {
-            if (!string.IsNullOrWhiteSpace(path))
+            if (string.IsNullOrWhiteSpace(path))
             {
-                candidates.Add(path);
+                return;
+            }
+
+            try
+            {
+                var normalizedPath = Path.GetFullPath(path);
+                if (addedFiles.Add(normalizedPath))
+                {
+                    candidates.Add(normalizedPath);
+                }
+            }
+            catch (Exception)
+            {
+                // Ignore malformed paths and keep searching other locations.
             }
         }
 
-        void AddDirectory(string directory)
+        void AddDirectory(string directory, int recursiveDepth = 0)
         {
             if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory) || !searchedDirectories.Add(directory))
             {
@@ -307,11 +429,59 @@ public class RaceTrackManager : MonoBehaviour
             {
                 AddFile(filePath);
             }
+
+            if (recursiveDepth <= 0)
+            {
+                return;
+            }
+
+            foreach (var subdirectory in Directory.GetDirectories(directory))
+            {
+                AddDirectory(subdirectory, recursiveDepth - 1);
+            }
+        }
+
+        void AddDriveRoot(string directory)
+        {
+            AddDirectory(directory, ExternalTrackSearchDepth);
+        }
+
+        void AddExternalMediaCandidates()
+        {
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
+            try
+            {
+                foreach (var drive in DriveInfo.GetDrives())
+                {
+                    if (!drive.IsReady)
+                    {
+                        continue;
+                    }
+
+                    if (drive.DriveType == DriveType.Removable)
+                    {
+                        AddDriveRoot(drive.RootDirectory.FullName);
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                Debug.LogWarning($"Unable to inspect external drives: {exception.Message}");
+            }
+#elif UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX
+            AddDriveRoot("/Volumes");
+#elif UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
+            AddDriveRoot("/media");
+            AddDriveRoot("/mnt");
+            AddDriveRoot("/run/media");
+#endif
         }
 
         AddDirectory(Application.streamingAssetsPath);
         AddDirectory(Application.persistentDataPath);
         AddDirectory(Path.GetDirectoryName(Application.dataPath));
+        AddDirectory(Environment.CurrentDirectory);
+        AddExternalMediaCandidates();
 
         return candidates;
     }
@@ -528,6 +698,54 @@ public class RaceTrackManager : MonoBehaviour
         {
             statusMessage = "You drifted away from the course. Press R to restart.";
         }
+    }
+
+    private void LateUpdate()
+    {
+        UpdateHud();
+    }
+
+    private void UpdateHud()
+    {
+        if (hudText == null)
+        {
+            return;
+        }
+
+        var displayedTime = raceFinished
+            ? finishTime
+            : stopwatchRunning
+                ? Time.time - raceStartTime
+                : 0f;
+
+        var nextCheckpointLine = raceFinished
+            ? "Track complete! Press R to run again."
+            : $"Next checkpoint: {Mathf.Min(nextCheckpointIndex + 1, checkpoints.Count)}/{checkpoints.Count}";
+
+        var bestTimeLine = bestTime > 0f
+            ? $"Best time: {bestTime:0.00}s"
+            : "Best time: --";
+
+        var distanceLine = "Distance to next: --";
+        if (!raceFinished && checkpointPositions.Count > 0 && nextCheckpointIndex < checkpointPositions.Count && racer != null)
+        {
+            var distance = Vector3.Distance(racer.position, checkpointPositions[nextCheckpointIndex]);
+            distanceLine = $"Distance to next: {distance:0.0}m";
+        }
+
+        var countdownLine = countdownActive
+            ? $"Countdown: {Mathf.CeilToInt(Mathf.Max(0f, countdownEndTime - Time.time))}"
+            : "Countdown: --";
+
+        hudText.text =
+            $"Race Track\n" +
+            $"Track: {loadedTrackLabel}\n" +
+            $"Time: {displayedTime:0.00}s\n" +
+            $"{bestTimeLine}\n" +
+            $"{nextCheckpointLine}\n" +
+            $"{distanceLine}\n" +
+            $"{countdownLine}\n" +
+            $"{statusMessage}";
     }
 
     private void FinishRace()

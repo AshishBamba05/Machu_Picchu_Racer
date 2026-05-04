@@ -14,6 +14,7 @@ public class DroneViewModeController : MonoBehaviour
     private const float GestureHoldDuration = 1f;
     private const float GestureCooldownDuration = 1f;
     private const float OpenHandThreshold = 0.12f;
+    private static readonly Vector3 ChaseOffset = new Vector3(0f, 2.2f, -5.5f);
 
     private readonly XRHandJointID[] openHandJoints =
     {
@@ -89,6 +90,19 @@ public class DroneViewModeController : MonoBehaviour
         gestureHoldTime = 0f;
         gestureCooldownUntil = Time.time + GestureCooldownDuration;
         ApplyViewMode((ViewMode)(((int)currentMode + 1) % 3));
+    }
+
+    private void LateUpdate()
+    {
+        if (!initialized || cameraOffset == null)
+        {
+            return;
+        }
+
+        if (currentMode == ViewMode.Chase)
+        {
+            UpdateChaseCameraPose();
+        }
     }
 
     private bool IsCycleGestureActive()
@@ -203,6 +217,7 @@ public class DroneViewModeController : MonoBehaviour
         if (cameraOffset != null)
         {
             cameraOffset.localPosition = defaultCameraOffsetLocalPosition;
+            cameraOffset.localRotation = Quaternion.identity;
         }
 
         cockpitVisual.SetActive(nextMode == ViewMode.Cockpit);
@@ -210,8 +225,21 @@ public class DroneViewModeController : MonoBehaviour
 
         if (nextMode == ViewMode.Chase && cameraOffset != null)
         {
-            cameraOffset.localPosition = defaultCameraOffsetLocalPosition + new Vector3(0f, 2.2f, -5.5f);
+            UpdateChaseCameraPose();
         }
+    }
+
+    private void UpdateChaseCameraPose()
+    {
+        cameraOffset.localPosition = defaultCameraOffsetLocalPosition + ChaseOffset;
+
+        var lookDirection = droneRoot.position - cameraOffset.position;
+        if (lookDirection.sqrMagnitude < 0.0001f)
+        {
+            return;
+        }
+
+        cameraOffset.rotation = Quaternion.LookRotation(lookDirection.normalized, Vector3.up);
     }
 
     private static void CreatePrimitive(
