@@ -11,8 +11,12 @@ public enum CheckpointVisualState
 public class RaceCheckpoint : MonoBehaviour
 {
     private static readonly Color BasePoleColor = new(0.15f, 0.65f, 1f);
+    private const float HeadArrowBaseDistance = 0.75f;
+    private const float HeadArrowBaseHeight = 0.18f;
 
     private Renderer[] cachedRenderers = System.Array.Empty<Renderer>();
+    private Transform headArrowRoot;
+    private Camera headArrowCamera;
     private RaceTrackManager raceManager;
     private int checkpointIndex = -1;
     private CheckpointVisualState currentState = CheckpointVisualState.Pending;
@@ -20,6 +24,8 @@ public class RaceCheckpoint : MonoBehaviour
     [SerializeField] private float activePulseSpeed = 2.4f;
     [SerializeField] private float activeEmissionMin = 0.75f;
     [SerializeField] private float activeEmissionMax = 2.2f;
+    [SerializeField] private float activeArrowBobSpeed = 2f;
+    [SerializeField] private float activeArrowBobDistance = 0.35f;
 
     public void Initialize(RaceTrackManager raceManager, int index)
     {
@@ -60,6 +66,12 @@ public class RaceCheckpoint : MonoBehaviour
             0.5f + 0.5f * Mathf.Sin(Time.time * activePulseSpeed));
 
         ApplyVisuals(BasePoleColor, pulse);
+
+        if (EnsureHeadArrow())
+        {
+            var bobOffset = Mathf.Sin(Time.time * activeArrowBobSpeed) * activeArrowBobDistance;
+            UpdateHeadArrowPose(bobOffset);
+        }
     }
 
     public void SetState(CheckpointVisualState state)
@@ -67,6 +79,100 @@ public class RaceCheckpoint : MonoBehaviour
         currentState = state;
         var emission = state == CheckpointVisualState.Active ? activeEmissionMax : activeEmissionMin;
         ApplyVisuals(BasePoleColor, emission);
+
+        if (state == CheckpointVisualState.Active)
+        {
+            if (EnsureHeadArrow())
+            {
+                headArrowRoot.gameObject.SetActive(true);
+                UpdateHeadArrowPose(0f);
+            }
+        }
+        else if (headArrowRoot != null)
+        {
+            headArrowRoot.gameObject.SetActive(false);
+        }
+    }
+
+    private bool EnsureHeadArrow()
+    {
+        if (headArrowRoot != null && headArrowCamera != null)
+        {
+            return true;
+        }
+
+        headArrowCamera = Camera.main;
+        if (headArrowCamera == null)
+        {
+            return false;
+        }
+
+        headArrowRoot = CreateArrow();
+        headArrowRoot.SetParent(headArrowCamera.transform, false);
+        headArrowRoot.gameObject.SetActive(false);
+        return true;
+    }
+
+    private void UpdateHeadArrowPose(float bobOffset)
+    {
+        if (headArrowRoot == null || headArrowCamera == null)
+        {
+            return;
+        }
+
+        var toCheckpoint = transform.position - headArrowCamera.transform.position;
+        if (toCheckpoint.sqrMagnitude < 0.0001f)
+        {
+            headArrowRoot.localPosition = new Vector3(0f, HeadArrowBaseHeight + bobOffset, HeadArrowBaseDistance);
+            headArrowRoot.localRotation = Quaternion.identity;
+            return;
+        }
+
+        var localDirection = headArrowCamera.transform.InverseTransformDirection(toCheckpoint.normalized);
+        var planarDirection = new Vector2(localDirection.x, localDirection.y);
+        if (planarDirection.sqrMagnitude < 0.0001f)
+        {
+            planarDirection = Vector2.down;
+        }
+
+        planarDirection.Normalize();
+        headArrowRoot.localPosition = new Vector3(
+            planarDirection.x * 0.18f,
+            HeadArrowBaseHeight + bobOffset + planarDirection.y * 0.12f,
+            HeadArrowBaseDistance);
+
+        var angle = Mathf.Atan2(-planarDirection.x, -planarDirection.y) * Mathf.Rad2Deg;
+        headArrowRoot.localRotation = Quaternion.Euler(0f, 0f, angle);
+    }
+
+    private static Transform CreateArrow()
+    {
+        var root = new GameObject("Next Checkpoint Arrow").transform;
+
+        var stem = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        stem.name = "Arrow Stem";
+        stem.transform.SetParent(root, false);
+        stem.transform.localPosition = new Vector3(0f, 0.16f, 0f);
+        stem.transform.localScale = new Vector3(0.025f, 0.16f, 0.025f);
+        Object.Destroy(stem.GetComponent<Collider>());
+
+        var leftHead = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        leftHead.name = "Arrow Head Left";
+        leftHead.transform.SetParent(root, false);
+        leftHead.transform.localPosition = new Vector3(-0.055f, -0.06f, 0f);
+        leftHead.transform.localRotation = Quaternion.Euler(0f, 0f, 45f);
+        leftHead.transform.localScale = new Vector3(0.04f, 0.16f, 0.04f);
+        Object.Destroy(leftHead.GetComponent<Collider>());
+
+        var rightHead = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        rightHead.name = "Arrow Head Right";
+        rightHead.transform.SetParent(root, false);
+        rightHead.transform.localPosition = new Vector3(0.055f, -0.06f, 0f);
+        rightHead.transform.localRotation = Quaternion.Euler(0f, 0f, -45f);
+        rightHead.transform.localScale = new Vector3(0.04f, 0.16f, 0.04f);
+        Object.Destroy(rightHead.GetComponent<Collider>());
+
+        return root;
     }
 
     private void ApplyVisuals(Color color, float emissionStrength)
