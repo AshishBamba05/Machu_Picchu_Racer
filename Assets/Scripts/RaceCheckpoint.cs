@@ -33,7 +33,7 @@ public class RaceCheckpoint : MonoBehaviour
         var poleObject = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         poleObject.name = "Wayfinding Pole";
         poleObject.transform.SetParent(transform, false);
-        poleObject.transform.localPosition = new Vector3(0f, 7f, 0f);
+        poleObject.transform.localPosition = new Vector3(0f, 5f, 0f);
         poleObject.transform.localScale = new Vector3(0.35f, 5f, 0.35f);
         Object.Destroy(poleObject.GetComponent<Collider>());
 
