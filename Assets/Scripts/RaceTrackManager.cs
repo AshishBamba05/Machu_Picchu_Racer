@@ -11,11 +11,18 @@ public class RaceTrackManager : MonoBehaviour
     private const float RespawnHeightOffset = 0f;
     private const float CountdownDuration = 3f;
     private const int ExternalTrackSearchDepth = 5;
+    private const float CheckpointSurfaceOffset = 0.15f;
+    private const float SurfaceProbePadding = 120f;
+    private const float ImportedTrackCoordinateScale = 0.0254f;
+    private const string DefaultTrackAnchorName = "machu_picchu_2";
 
     [Header("Track Loading")]
     [SerializeField] private string preferredTrackFileName = "competition.xyz";
     [SerializeField] private string fallbackTrackFileName = "sample_track.xyz";
     [SerializeField] private bool allowProceduralFallback = false;
+    [SerializeField] private bool interpretTrackCoordinatesAsModelLocal = true;
+    [SerializeField] private bool snapCheckpointHeightToSurface = true;
+    [SerializeField] private string trackAnchorObjectName = DefaultTrackAnchorName;
 
     private readonly List<RaceCheckpoint> checkpoints = new();
     private readonly List<Vector3> checkpointPositions = new();
@@ -309,6 +316,8 @@ public class RaceTrackManager : MonoBehaviour
             return;
         }
 
+        ConvertTrackCoordinatesToWorldSpace();
+        AlignCheckpointHeightsToSurface();
         BuildTrackVisuals();
     }
 
@@ -505,6 +514,108 @@ public class RaceTrackManager : MonoBehaviour
         }
 
         return positions;
+    }
+
+    private void ConvertTrackCoordinatesToWorldSpace()
+    {
+        if (checkpointPositions.Count == 0)
+        {
+            return;
+        }
+
+        if (!interpretTrackCoordinatesAsModelLocal)
+        {
+            return;
+        }
+
+        var trackAnchor = FindTrackAnchor();
+        if (trackAnchor == null)
+        {
+            Debug.LogWarning($"Track anchor '{trackAnchorObjectName}' was not found. Using track coordinates as world positions.");
+            return;
+        }
+
+        for (var index = 0; index < checkpointPositions.Count; index++)
+        {
+            var localPosition = checkpointPositions[index] * ImportedTrackCoordinateScale;
+            checkpointPositions[index] = trackAnchor.TransformPoint(localPosition);
+        }
+    }
+
+    private void AlignCheckpointHeightsToSurface()
+    {
+        if (!snapCheckpointHeightToSurface || checkpointPositions.Count == 0)
+        {
+            return;
+        }
+
+        hasCourseBounds = TryGetSceneBounds(out courseBounds);
+        if (!hasCourseBounds)
+        {
+            return;
+        }
+
+        for (var index = 0; index < checkpointPositions.Count; index++)
+        {
+            var checkpointPosition = checkpointPositions[index];
+            var probeOrigin = new Vector3(checkpointPosition.x, courseBounds.max.y + SurfaceProbePadding, checkpointPosition.z);
+            if (TryProjectCheckpointHeight(probeOrigin, out var groundedPosition))
+            {
+                checkpointPositions[index] = groundedPosition;
+            }
+        }
+    }
+
+    private Transform FindTrackAnchor()
+    {
+        foreach (var sceneTransform in FindObjectsOfType<Transform>(true))
+        {
+            if (sceneTransform != null &&
+                sceneTransform.name.Equals(trackAnchorObjectName, StringComparison.OrdinalIgnoreCase))
+            {
+                return sceneTransform;
+            }
+        }
+
+        return null;
+    }
+
+    private bool TryProjectCheckpointHeight(Vector3 probeOrigin, out Vector3 groundedPosition)
+    {
+        var rayLength = (courseBounds.size.y + SurfaceProbePadding * 2f) + 1f;
+        var hits = Physics.RaycastAll(probeOrigin, Vector3.down, rayLength, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+
+        Array.Sort(hits, (left, right) => right.point.y.CompareTo(left.point.y));
+
+        foreach (var hit in hits)
+        {
+            if (!IsValidSurfaceHit(hit))
+            {
+                continue;
+            }
+
+            groundedPosition = hit.point + Vector3.up * CheckpointSurfaceOffset;
+            return true;
+        }
+
+        groundedPosition = default;
+        return false;
+    }
+
+    private bool IsValidSurfaceHit(RaycastHit hit)
+    {
+        if (hit.collider == null || hit.collider.isTrigger)
+        {
+            return false;
+        }
+
+        var hitTransform = hit.collider.transform;
+        if (hitTransform.IsChildOf(transform) || hitTransform.IsChildOf(racer))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private void BuildTrackVisuals()
