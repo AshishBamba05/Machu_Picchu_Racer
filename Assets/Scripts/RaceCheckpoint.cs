@@ -10,9 +10,16 @@ public enum CheckpointVisualState
 [DisallowMultipleComponent]
 public class RaceCheckpoint : MonoBehaviour
 {
+    private static readonly Color BasePoleColor = new(0.15f, 0.65f, 1f);
+
     private Renderer[] cachedRenderers = System.Array.Empty<Renderer>();
     private RaceTrackManager raceManager;
     private int checkpointIndex = -1;
+    private CheckpointVisualState currentState = CheckpointVisualState.Pending;
+
+    [SerializeField] private float activePulseSpeed = 2.4f;
+    [SerializeField] private float activeEmissionMin = 0.75f;
+    [SerializeField] private float activeEmissionMax = 2.2f;
 
     public void Initialize(RaceTrackManager raceManager, int index)
     {
@@ -40,10 +47,30 @@ public class RaceCheckpoint : MonoBehaviour
         cachedRenderers = GetComponentsInChildren<Renderer>(true);
     }
 
+    private void Update()
+    {
+        if (currentState != CheckpointVisualState.Active)
+        {
+            return;
+        }
+
+        var pulse = Mathf.Lerp(
+            activeEmissionMin,
+            activeEmissionMax,
+            0.5f + 0.5f * Mathf.Sin(Time.time * activePulseSpeed));
+
+        ApplyVisuals(BasePoleColor, pulse);
+    }
+
     public void SetState(CheckpointVisualState state)
     {
-        var color = new Color(0.15f, 0.65f, 1f);
+        currentState = state;
+        var emission = state == CheckpointVisualState.Active ? activeEmissionMax : activeEmissionMin;
+        ApplyVisuals(BasePoleColor, emission);
+    }
 
+    private void ApplyVisuals(Color color, float emissionStrength)
+    {
         foreach (var sceneRenderer in cachedRenderers)
         {
             if (sceneRenderer == null)
@@ -57,7 +84,7 @@ public class RaceCheckpoint : MonoBehaviour
             if (material.HasProperty("_EmissionColor"))
             {
                 material.EnableKeyword("_EMISSION");
-                material.SetColor("_EmissionColor", color * 0.8f);
+                material.SetColor("_EmissionColor", color * emissionStrength);
             }
         }
     }
