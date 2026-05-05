@@ -24,7 +24,6 @@ public class RaceTrackManager : MonoBehaviour
     private Transform racer;
     private Travel travelController;
     private DroneViewModeController viewModeController;
-    private LineRenderer pathLine;
     private Transform hudRoot;
     private TextMeshPro hudText;
     private Bounds courseBounds;
@@ -522,25 +521,6 @@ public class RaceTrackManager : MonoBehaviour
 
             checkpoints.Add(CreateCheckpoint(index, checkpointPositions[index], nextPosition));
         }
-
-        pathLine = gameObject.GetComponent<LineRenderer>();
-        if (pathLine == null)
-        {
-            pathLine = gameObject.AddComponent<LineRenderer>();
-        }
-
-        pathLine.material = new Material(Shader.Find("Sprites/Default"));
-        pathLine.widthMultiplier = 0.2f;
-        pathLine.positionCount = checkpointPositions.Count;
-        pathLine.loop = false;
-        pathLine.startColor = new Color(1f, 0.85f, 0.2f, 0.55f);
-        pathLine.endColor = new Color(0.2f, 0.85f, 1f, 0.55f);
-        pathLine.useWorldSpace = true;
-
-        for (var index = 0; index < checkpointPositions.Count; index++)
-        {
-            pathLine.SetPosition(index, checkpointPositions[index]);
-        }
     }
 
     private RaceCheckpoint CreateCheckpoint(int index, Vector3 position, Vector3 nextPosition)
@@ -559,45 +539,9 @@ public class RaceTrackManager : MonoBehaviour
         var checkpoint = checkpointRoot.AddComponent<RaceCheckpoint>();
         checkpoint.Initialize(this, index);
 
-        CreatePole(checkpointRoot.transform, new Vector3(-2f, 0f, 0f));
-        CreatePole(checkpointRoot.transform, new Vector3(2f, 0f, 0f));
-        CreateBeam(checkpointRoot.transform, new Vector3(0f, 2f, 0f), new Vector3(4.3f, 0.25f, 0.25f));
-        CreateBeam(checkpointRoot.transform, new Vector3(0f, -2f, 0f), new Vector3(4.3f, 0.25f, 0.25f));
-        CreateBeacon(checkpointRoot.transform);
-
         checkpoint.CacheRenderers();
         checkpoint.SetState(CheckpointVisualState.Pending);
         return checkpoint;
-    }
-
-    private static void CreatePole(Transform parent, Vector3 localPosition)
-    {
-        var pole = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        pole.name = "Pole";
-        pole.transform.SetParent(parent, false);
-        pole.transform.localPosition = localPosition;
-        pole.transform.localScale = new Vector3(0.18f, 2f, 0.18f);
-        Destroy(pole.GetComponent<Collider>());
-    }
-
-    private static void CreateBeam(Transform parent, Vector3 localPosition, Vector3 localScale)
-    {
-        var beam = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        beam.name = "Beam";
-        beam.transform.SetParent(parent, false);
-        beam.transform.localPosition = localPosition;
-        beam.transform.localScale = localScale;
-        Destroy(beam.GetComponent<Collider>());
-    }
-
-    private static void CreateBeacon(Transform parent)
-    {
-        var beacon = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        beacon.name = "Beacon";
-        beacon.transform.SetParent(parent, false);
-        beacon.transform.localPosition = new Vector3(0f, 3f, 0f);
-        beacon.transform.localScale = Vector3.one * 0.7f;
-        Destroy(beacon.GetComponent<Collider>());
     }
 
     private void ResetRace(bool forceRespawn, bool initialStart)
@@ -820,12 +764,6 @@ public class RaceTrackManager : MonoBehaviour
 
         checkpoints.Clear();
         checkpointPositions.Clear();
-
-        if (pathLine != null)
-        {
-            Destroy(pathLine);
-            pathLine = null;
-        }
     }
 
     private bool TryGetSceneBounds(out Bounds bounds)
@@ -841,7 +779,7 @@ public class RaceTrackManager : MonoBehaviour
                 continue;
             }
 
-            if (sceneRenderer is TrailRenderer || sceneRenderer is LineRenderer)
+            if (sceneRenderer is TrailRenderer)
             {
                 continue;
             }
