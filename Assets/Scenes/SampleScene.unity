@@ -498,7 +498,7 @@ MonoBehaviour:
   m_HandMeshMaterial: {fileID: 2100000, guid: 613690cd962241049a0ec289a6ff835e, type: 2}
   m_DrawMeshes: 1
   m_DebugDrawPrefab: {fileID: 6507399986997092475, guid: 254b742d65a15d14b9df756ae77de868, type: 3}
-  m_DebugDrawJoints: 1
+  m_DebugDrawJoints: 0
   m_VelocityPrefab: {fileID: 8538602047018081646, guid: 629fd7882ec6bfc499a5fcf20035282b, type: 3}
   m_VelocityType: 2
 --- !u!114 &935940903
@@ -559,6 +559,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1085439597}
   - component: {fileID: 1085439596}
+  - component: {fileID: 1085439598}
   m_Layer: 0
   m_Name: XR Origin
   m_TagString: Untagged
@@ -599,6 +600,30 @@ Transform:
   - {fileID: 944581975}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: -1.561, y: 235.84799, z: -1.857}
+--- !u!114 &1085439598
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1085439595}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d2e0099426c38409abe7aa8f8cb04d27, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Travel
+  drone: {fileID: 1085439597}
+  forwardSpeedMultiplier: 4
+  maxForwardSpeed: 8
+  maxBackwardSpeed: 4
+  movementDeadZone: 0.08
+  verticalSpeedMultiplier: 4
+  maxVerticalSpeed: 5
+  verticalDeadZone: 0.08
+  turnSpeed: 80
+  turnDeadZone: 0.15
+  fistThreshold: 0.09
+  canMove: 1
 --- !u!1001 &1152590806
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -654,8 +679,38 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 919132149155446097, guid: 2dacbac389be74856a16bf035915e6d5, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 1152590808}
   m_SourcePrefab: {fileID: 100100000, guid: 2dacbac389be74856a16bf035915e6d5, type: 3}
+--- !u!1 &1152590807 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 919132149155446097, guid: 2dacbac389be74856a16bf035915e6d5, type: 3}
+  m_PrefabInstance: {fileID: 1152590806}
+  m_PrefabAsset: {fileID: 0}
+--- !u!64 &1152590808
+MeshCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1152590807}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 5
+  m_Convex: 0
+  m_CookingOptions: 30
+  m_Mesh: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
