@@ -46,8 +46,14 @@ public class Travel : MonoBehaviour
     {
         if (handSubsystem == null)
         {
+            Debug.Log("No XRHandSubsystem found");
             TryInitializeHands();
+            return;
+           
         }
+        Debug.Log("Left tracked: " + handSubsystem.leftHand.isTracked +
+          " Right tracked: " + handSubsystem.rightHand.isTracked);
+        
 
         if (!canMove || handSubsystem == null)
             return;
