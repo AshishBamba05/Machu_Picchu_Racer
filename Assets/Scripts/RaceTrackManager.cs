@@ -21,7 +21,7 @@ public class RaceTrackManager : MonoBehaviour
     [SerializeField] private string fallbackTrackFileName = "sample_track.xyz";
     [SerializeField] private bool allowProceduralFallback = false;
     [SerializeField] private bool interpretTrackCoordinatesAsModelLocal = true;
-    [SerializeField] private bool snapCheckpointHeightToSurface = true;
+    [SerializeField] private bool snapCheckpointHeightToSurface = false;
     [SerializeField] private string trackAnchorObjectName = DefaultTrackAnchorName;
 
     private readonly List<RaceCheckpoint> checkpoints = new();

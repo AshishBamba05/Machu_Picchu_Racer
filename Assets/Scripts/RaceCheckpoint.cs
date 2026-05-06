@@ -13,6 +13,11 @@ public class RaceCheckpoint : MonoBehaviour
     private static readonly Color BasePoleColor = new(0.15f, 0.65f, 1f);
     private const float HeadArrowBaseDistance = 0.75f;
     private const float HeadArrowBaseHeight = 0.18f;
+    private const float DefaultPoleHeight = 10f;
+    private const float MinimumPoleHeight = 0.5f;
+    private const float PoleRadius = 0.35f;
+    private const float PoleGroundOffset = 0.05f;
+    private const float PoleProbeDistance = 250f;
 
     private Renderer[] cachedRenderers = System.Array.Empty<Renderer>();
     private Transform headArrowRoot;
@@ -51,14 +56,29 @@ public class RaceCheckpoint : MonoBehaviour
         checkpointSphere.transform.localScale = Vector3.one * checkpointSphereDiameter;
         Object.Destroy(checkpointSphere.GetComponent<Collider>());
 
+        var sphereRadius = checkpointSphereDiameter * 0.5f;
+        var poleHeight = GetPoleHeight(sphereRadius);
+        var poleHalfHeight = poleHeight * 0.5f;
+
         var poleObject = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         poleObject.name = "Wayfinding Pole";
         poleObject.transform.SetParent(transform, false);
-        poleObject.transform.localPosition = new Vector3(0f, 5f, 0f);
-        poleObject.transform.localScale = new Vector3(0.35f, 5f, 0.35f);
+        poleObject.transform.localPosition = new Vector3(0f, -(sphereRadius + poleHalfHeight), 0f);
+        poleObject.transform.localScale = new Vector3(PoleRadius, poleHalfHeight, PoleRadius);
         Object.Destroy(poleObject.GetComponent<Collider>());
 
         cachedRenderers = GetComponentsInChildren<Renderer>(true);
+    }
+
+    private float GetPoleHeight(float sphereRadius)
+    {
+        var origin = transform.position + Vector3.down * sphereRadius;
+        if (Physics.Raycast(origin, Vector3.down, out var hit, PoleProbeDistance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+        {
+            return Mathf.Max(hit.distance - PoleGroundOffset, MinimumPoleHeight);
+        }
+
+        return DefaultPoleHeight;
     }
 
     private void Update()
