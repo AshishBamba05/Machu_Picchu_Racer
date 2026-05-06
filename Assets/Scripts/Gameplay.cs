@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
 
@@ -8,149 +9,325 @@ public class Gameplay : MonoBehaviour
     public Travel travelScript;
     public Transform drone;
 
-    [Header("UI")]
-    public TMP_Text timerText;
-    public TMP_Text messageText;
+    [Header("First Person View")]
+    public GameObject droneVisualRoot;
+    public bool hideDroneVisual = true;
+
+    [Header("Single UI Text")]
+    public TMP_Text gameplayText;
 
     [Header("Gameplay Settings")]
     public float startCountdownTime = 3f;
     public float crashPenaltyTime = 3f;
 
-    [Header("Checkpoint (from partner)")]
-    public Transform firstCheckpoint;
-    public Transform secondCheckpoint;
-    public Vector3 lastClearedCheckpointPosition;
+    // 30 feet = 9.144 meters
+    public float checkpointReachRadius = 9.144f;
+
+    private readonly List<Transform> checkpoints = new List<Transform>();
+
+    private int currentCheckpointIndex = 1;
+    private int lastClearedCheckpointIndex = 0;
 
     private float timer = 0f;
+
     private bool timerRunning = false;
     private bool raceFinished = false;
-    private bool isInPenalty = false;
+    private bool isInCrashPenalty = false;
+    private bool raceReady = false;
 
-    void Start()
+    private string currentMessage = "";
+
+    private void Start()
     {
-        // Disable movement at start
+        if (drone == null)
+            drone = transform;
+
+        if (travelScript == null)
+            travelScript = drone.GetComponent<Travel>();
+
         if (travelScript != null)
+        {
             travelScript.canMove = false;
-
-        // Set starting position
-        if (firstCheckpoint != null)
-        {
-            drone.position = firstCheckpoint.position;
-            lastClearedCheckpointPosition = firstCheckpoint.position;
+            travelScript.TriggerEntered += HandleDroneTriggerEntered;
         }
 
-        // Face second checkpoint
-        if (secondCheckpoint != null)
-        {
-            Vector3 dir = (secondCheckpoint.position - drone.position).normalized;
-            dir.y = 0f;
-            if (dir != Vector3.zero)
-                drone.rotation = Quaternion.LookRotation(dir);
-        }
+        if (hideDroneVisual && droneVisualRoot != null)
+            droneVisualRoot.SetActive(false);
 
-        StartCoroutine(StartCountdown());
+        StartCoroutine(WaitForCheckpointsThenStart());
     }
 
-    void Update()
+    private void Update()
     {
-        // Timer runs continuously after start
         if (timerRunning && !raceFinished)
         {
             timer += Time.deltaTime;
-            UpdateTimerUI();
+        }
+
+        if (raceReady && !raceFinished && !isInCrashPenalty)
+        {
+            CheckCheckpointProgress();
+        }
+
+        UpdateGameplayUI();
+    }
+
+    private IEnumerator WaitForCheckpointsThenStart()
+    {
+        currentMessage = "Loading checkpoints...";
+
+        while (checkpoints.Count < 2)
+        {
+            FindGeneratedCheckpoints();
+
+            if (checkpoints.Count >= 2)
+                break;
+
+            yield return null;
+        }
+
+        SetupDroneAtStart();
+
+        yield return StartCoroutine(StartCountdown());
+
+        raceReady = true;
+    }
+
+    private void FindGeneratedCheckpoints()
+    {
+        checkpoints.Clear();
+
+        RaceCheckpoint[] foundCheckpoints = FindObjectsOfType<RaceCheckpoint>();
+
+        System.Array.Sort(foundCheckpoints, (a, b) =>
+            a.CheckpointIndex.CompareTo(b.CheckpointIndex));
+
+        foreach (RaceCheckpoint checkpoint in foundCheckpoints)
+        {
+            if (checkpoint != null)
+                checkpoints.Add(checkpoint.transform);
         }
     }
 
-    // =========================
-    // START COUNTDOWN
-    // =========================
-    IEnumerator StartCountdown()
+    private void SetupDroneAtStart()
     {
+        timer = 0f;
+        timerRunning = false;
+        raceFinished = false;
+        isInCrashPenalty = false;
+
+        lastClearedCheckpointIndex = 0;
+        currentCheckpointIndex = 1;
+
+        MoveDroneToCheckpoint(0);
+    }
+
+    private IEnumerator StartCountdown()
+    {
+        if (travelScript != null)
+            travelScript.canMove = false;
+
         float count = startCountdownTime;
 
         while (count > 0)
         {
-            messageText.text = Mathf.Ceil(count).ToString();
+            currentMessage = "Starting in " + Mathf.CeilToInt(count);
+
             yield return new WaitForSeconds(1f);
             count--;
         }
 
-        messageText.text = "GO!";
+        currentMessage = "GO!";
+
         yield return new WaitForSeconds(1f);
 
-        messageText.text = "";
+        currentMessage = "";
+
+        timerRunning = true;
 
         if (travelScript != null)
             travelScript.canMove = true;
-
-        timerRunning = true;
     }
 
-    // =========================
-    // CRASH HANDLING
-    // =========================
+    private void CheckCheckpointProgress()
+    {
+        if (currentCheckpointIndex >= checkpoints.Count)
+            return;
+
+        Transform targetCheckpoint = checkpoints[currentCheckpointIndex];
+
+        if (targetCheckpoint == null)
+            return;
+
+        float distance = Vector3.Distance(drone.position, targetCheckpoint.position);
+
+        if (distance <= checkpointReachRadius)
+        {
+            lastClearedCheckpointIndex = currentCheckpointIndex;
+            currentCheckpointIndex++;
+
+            if (currentCheckpointIndex >= checkpoints.Count)
+            {
+                FinishRace();
+                return;
+            }
+
+            currentMessage = "Checkpoint reached!";
+
+            StartCoroutine(ClearMessageAfterDelay(1f));
+        }
+    }
+
+    private void HandleDroneTriggerEntered(Collider other)
+    {
+        if (other == null || raceFinished || isInCrashPenalty)
+            return;
+
+        // Ignore checkpoints
+        if (other.GetComponent<RaceCheckpoint>() != null)
+            return;
+
+        // Ignore self collision
+        if (other.transform.root == drone.root)
+            return;
+
+        OnCrash();
+    }
+
+    private void OnCollisionEnter(Collision collision)
+    {
+        if (collision == null || raceFinished || isInCrashPenalty)
+            return;
+
+        if (collision.transform.root == drone.root)
+            return;
+
+        OnCrash();
+    }
+
     public void OnCrash()
     {
-        if (isInPenalty || raceFinished)
+        if (raceFinished || isInCrashPenalty)
             return;
 
         StartCoroutine(CrashPenalty());
     }
 
-    IEnumerator CrashPenalty()
+    private IEnumerator CrashPenalty()
     {
-        isInPenalty = true;
+        isInCrashPenalty = true;
 
-        // Disable movement
         if (travelScript != null)
             travelScript.canMove = false;
 
-        // Reset position
-        drone.position = lastClearedCheckpointPosition;
+        MoveDroneToCheckpoint(lastClearedCheckpointIndex);
 
-        // Show penalty countdown
         float count = crashPenaltyTime;
 
         while (count > 0)
         {
-            messageText.text = "Crash! " + Mathf.Ceil(count);
+            currentMessage = "Crash! Restarting in " + Mathf.CeilToInt(count);
+
             yield return new WaitForSeconds(1f);
             count--;
         }
 
-        messageText.text = "";
+        currentMessage = "";
 
-        // Re-enable movement
         if (travelScript != null)
             travelScript.canMove = true;
 
-        isInPenalty = false;
+        isInCrashPenalty = false;
     }
 
-    // =========================
-    // CALLED BY PARTNER SCRIPT
-    // =========================
-    public void UpdateCheckpoint(Vector3 newCheckpointPosition)
+    private void MoveDroneToCheckpoint(int checkpointIndex)
     {
-        lastClearedCheckpointPosition = newCheckpointPosition;
+        if (checkpointIndex < 0 || checkpointIndex >= checkpoints.Count)
+            return;
+
+        Transform checkpoint = checkpoints[checkpointIndex];
+
+        if (checkpoint == null)
+            return;
+
+        drone.position = checkpoint.position;
+
+        int nextIndex = Mathf.Min(checkpointIndex + 1, checkpoints.Count - 1);
+        Transform nextCheckpoint = checkpoints[nextIndex];
+
+        if (nextCheckpoint == null)
+            return;
+
+        Vector3 flatDirection = nextCheckpoint.position - checkpoint.position;
+        flatDirection.y = 0f;
+
+        if (flatDirection.sqrMagnitude > 0.0001f)
+            drone.rotation = Quaternion.LookRotation(flatDirection.normalized, Vector3.up);
+        else
+            drone.rotation = Quaternion.identity;
     }
 
-    public void FinishRace()
+    private void FinishRace()
     {
         raceFinished = true;
         timerRunning = false;
 
-        messageText.text = "Finished!";
+        if (travelScript != null)
+            travelScript.canMove = false;
+
+        currentMessage = "Finished!";
     }
 
-    // =========================
-    // TIMER UI
-    // =========================
-    void UpdateTimerUI()
+    private IEnumerator ClearMessageAfterDelay(float delay)
     {
-        int minutes = Mathf.FloorToInt(timer / 60);
-        int seconds = Mathf.FloorToInt(timer % 60);
+        yield return new WaitForSeconds(delay);
 
-        timerText.text = minutes.ToString("00") + ":" + seconds.ToString("00");
+        if (!raceFinished && !isInCrashPenalty)
+            currentMessage = "";
+    }
+
+    private void UpdateGameplayUI()
+    {
+        if (gameplayText == null)
+            return;
+
+        string timerString = "Time: " + FormatTime(timer);
+
+        string checkpointString;
+
+        if (raceFinished)
+        {
+            checkpointString =
+                "Checkpoints: " +
+                checkpoints.Count + "/" + checkpoints.Count;
+        }
+        else
+        {
+            checkpointString =
+                "Checkpoints: " +
+                (lastClearedCheckpointIndex + 1) +
+                "/" +
+                checkpoints.Count +
+                "\nNext: " +
+                (currentCheckpointIndex + 1);
+        }
+
+        gameplayText.text =
+            timerString +
+            "\n" +
+            checkpointString +
+            "\n" +
+            currentMessage;
+    }
+
+    private string FormatTime(float time)
+    {
+        int minutes = Mathf.FloorToInt(time / 60f);
+        int seconds = Mathf.FloorToInt(time % 60f);
+        int milliseconds = Mathf.FloorToInt((time * 100f) % 100f);
+
+        return minutes.ToString("00") + ":" +
+               seconds.ToString("00") + "." +
+               milliseconds.ToString("00");
     }
 }
