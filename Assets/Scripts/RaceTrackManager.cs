@@ -818,6 +818,11 @@ public class RaceTrackManager : MonoBehaviour
             ? "Track complete! Press R to run again."
             : $"Next checkpoint: {Mathf.Min(nextCheckpointIndex + 1, checkpoints.Count)}/{checkpoints.Count}";
 
+        var checkpointsPassed = checkpoints.Count == 0
+            ? 0
+            : Mathf.Clamp(lastClearedCheckpointIndex + 1, 0, checkpoints.Count);
+        var checkpointProgressLine = $"Checkpoints passed: {checkpointsPassed}/{checkpoints.Count}";
+
         var bestTimeLine = bestTime > 0f
             ? $"Best time: {bestTime:0.00}s"
             : "Best time: --";
@@ -838,6 +843,7 @@ public class RaceTrackManager : MonoBehaviour
             $"Track: {loadedTrackLabel}\n" +
             $"Time: {displayedTime:0.00}s\n" +
             $"{bestTimeLine}\n" +
+            $"{checkpointProgressLine}\n" +
             $"{nextCheckpointLine}\n" +
             $"{distanceLine}\n" +
             $"{countdownLine}\n" +

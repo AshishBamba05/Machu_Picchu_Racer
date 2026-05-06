@@ -26,6 +26,7 @@ public class RaceCheckpoint : MonoBehaviour
     [SerializeField] private float activeEmissionMax = 2.2f;
     [SerializeField] private float activeArrowBobSpeed = 2f;
     [SerializeField] private float activeArrowBobDistance = 0.35f;
+    [SerializeField] private float checkpointSphereDiameter = 1.8f;
 
     public void Initialize(RaceTrackManager raceManager, int index)
     {
@@ -43,6 +44,13 @@ public class RaceCheckpoint : MonoBehaviour
 
     public void CacheRenderers()
     {
+        var checkpointSphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        checkpointSphere.name = "Checkpoint Core";
+        checkpointSphere.transform.SetParent(transform, false);
+        checkpointSphere.transform.localPosition = Vector3.zero;
+        checkpointSphere.transform.localScale = Vector3.one * checkpointSphereDiameter;
+        Object.Destroy(checkpointSphere.GetComponent<Collider>());
+
         var poleObject = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         poleObject.name = "Wayfinding Pole";
         poleObject.transform.SetParent(transform, false);
