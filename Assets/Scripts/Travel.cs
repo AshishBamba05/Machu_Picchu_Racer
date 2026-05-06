@@ -8,18 +8,22 @@ public class Travel : MonoBehaviour
     [Header("Drone")]
     public Transform drone;
 
+    [Header("Headset")]
+    public Transform headsetCamera;
+
     [Header("Movement")]
-    public float forwardSpeedMultiplier = 4f;
-    public float maxForwardSpeed = 8f;
-    public float maxBackwardSpeed = 4f;
-    public float movementDeadZone = 0.08f;
-    public float verticalSpeedMultiplier = 4f;
-    public float maxVerticalSpeed = 5f;
-    public float verticalDeadZone = 0.08f;
+    public float forwardSpeedMultiplier = 18f;
+    public float maxForwardSpeed = 25f;
+    public float maxBackwardSpeed = 15f;
+    public float movementDeadZone = 0.04f;
+
+    public float verticalSpeedMultiplier = 14f;
+    public float maxVerticalSpeed = 18f;
+    public float verticalDeadZone = 0.04f;
 
     [Header("Rotation")]
-    public float turnSpeed = 80f;
-    public float turnDeadZone = 0.15f;
+    public float turnSpeed = 140f;
+    public float turnDeadZone = 0.12f;
 
     [Header("Fist Detection")]
     public float fistThreshold = 0.09f;
@@ -39,6 +43,9 @@ public class Travel : MonoBehaviour
         if (drone == null)
             drone = transform;
 
+        if (headsetCamera == null && Camera.main != null)
+            headsetCamera = Camera.main.transform;
+
         TryInitializeHands();
     }
 
@@ -46,16 +53,11 @@ public class Travel : MonoBehaviour
     {
         if (handSubsystem == null)
         {
-            Debug.Log("No XRHandSubsystem found");
             TryInitializeHands();
             return;
-           
         }
-        Debug.Log("Left tracked: " + handSubsystem.leftHand.isTracked +
-          " Right tracked: " + handSubsystem.rightHand.isTracked);
-        
 
-        if (!canMove || handSubsystem == null)
+        if (!canMove)
             return;
 
         XRHand leftHand = handSubsystem.leftHand;
@@ -74,12 +76,10 @@ public class Travel : MonoBehaviour
         bool leftFist = IsFist(leftHand, leftPalmPose.position);
         bool rightFist = IsFist(rightHand, rightPalmPose.position);
 
-        // Use the offset of both fists from their neutral pose to drive translation.
         if (leftFist && rightFist)
         {
             Vector3 fistCenter = (leftPalmPose.position + rightPalmPose.position) / 2f;
 
-            // First frame with both fists becomes the neutral hand position
             if (!hasNeutralFistPosition)
             {
                 neutralFistCenter = fistCenter;
@@ -87,28 +87,34 @@ public class Travel : MonoBehaviour
             }
 
             Vector3 worldOffset = fistCenter - neutralFistCenter;
-            Vector3 localOffset = drone.InverseTransformDirection(worldOffset);
 
-            float forwardAmount = localOffset.z;
+            // Use headset direction for forward/backward movement.
+            Vector3 forwardDirection = headsetCamera != null ? headsetCamera.forward : drone.forward;
+            forwardDirection.y = 0f;
+            forwardDirection.Normalize();
+
+            float forwardAmount = Vector3.Dot(worldOffset, forwardDirection);
 
             if (Mathf.Abs(forwardAmount) > movementDeadZone)
             {
                 float speed = forwardAmount * forwardSpeedMultiplier;
                 speed = Mathf.Clamp(speed, -maxBackwardSpeed, maxForwardSpeed);
 
-                drone.position += drone.forward * speed * Time.deltaTime;
+                drone.position += forwardDirection * speed * Time.deltaTime;
             }
 
-            float verticalAmount = localOffset.y;
+            float verticalAmount = worldOffset.y;
+
             if (Mathf.Abs(verticalAmount) > verticalDeadZone)
             {
-                float verticalSpeed = Mathf.Clamp(verticalAmount * verticalSpeedMultiplier, -maxVerticalSpeed, maxVerticalSpeed);
+                float verticalSpeed = verticalAmount * verticalSpeedMultiplier;
+                verticalSpeed = Mathf.Clamp(verticalSpeed, -maxVerticalSpeed, maxVerticalSpeed);
+
                 drone.position += Vector3.up * verticalSpeed * Time.deltaTime;
             }
         }
         else
         {
-            // Reset neutral when fists are released
             hasNeutralFistPosition = false;
         }
 
@@ -118,7 +124,6 @@ public class Travel : MonoBehaviour
         Vector3 localLeftUp = drone.InverseTransformDirection(leftPalmUp);
         Vector3 localRightUp = drone.InverseTransformDirection(rightPalmUp);
 
-        // Wrist rotation always contributes steering so the drone can turn while moving.
         float turnAmount = localRightUp.x - localLeftUp.x;
 
         if (Mathf.Abs(turnAmount) > turnDeadZone)
@@ -135,6 +140,7 @@ public class Travel : MonoBehaviour
     private void TryInitializeHands()
     {
         var manager = XRGeneralSettings.Instance?.Manager;
+
         if (manager?.activeLoader == null)
             return;
 
