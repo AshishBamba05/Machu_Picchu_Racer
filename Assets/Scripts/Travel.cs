@@ -11,21 +11,20 @@ public class Travel : MonoBehaviour
     [Header("Headset")]
     public Transform headsetCamera;
 
-    [Header("Movement")]
-    public float forwardSpeedMultiplier = 18f;
-    public float maxForwardSpeed = 25f;
-    public float maxBackwardSpeed = 15f;
-    public float movementDeadZone = 0.04f;
+    [Header("Forward / Backward Movement")]
+    public float forwardSpeed = 85f;
+    public float backwardSpeed = 60f;
+    public float movementDeadZone = 0.012f;
 
-    public float verticalSpeedMultiplier = 14f;
-    public float maxVerticalSpeed = 18f;
-    public float verticalDeadZone = 0.04f;
+    [Header("Up / Down Movement")]
+    public float verticalSpeed = 35f;
+    public float thumbHeightThreshold = 0.08f;
 
     [Header("Rotation")]
-    public float turnSpeed = 140f;
-    public float turnDeadZone = 0.12f;
+    public float turnSpeed = 55f;
+    public float turnDeadZone = 0.02f;
 
-    [Header("Fist Detection")]
+    [Header("Gesture Detection")]
     public float fistThreshold = 0.09f;
 
     [Header("Gameplay Lock")]
@@ -37,6 +36,9 @@ public class Travel : MonoBehaviour
 
     private bool hasNeutralFistPosition = false;
     private Vector3 neutralFistCenter;
+
+    private bool isRotating = false;
+    private Quaternion lastRightPalmRotation;
 
     void Start()
     {
@@ -66,6 +68,7 @@ public class Travel : MonoBehaviour
         if (!leftHand.isTracked || !rightHand.isTracked)
         {
             hasNeutralFistPosition = false;
+            isRotating = false;
             return;
         }
 
@@ -76,6 +79,20 @@ public class Travel : MonoBehaviour
         bool leftFist = IsFist(leftHand, leftPalmPose.position);
         bool rightFist = IsFist(rightHand, rightPalmPose.position);
 
+        bool leftThumbUp = IsThumbUp(leftHand, leftPalmPose.position);
+        bool rightThumbUp = IsThumbUp(rightHand, rightPalmPose.position);
+
+        bool leftThumbDown = IsThumbDown(leftHand, leftPalmPose.position);
+        bool rightThumbDown = IsThumbDown(rightHand, rightPalmPose.position);
+
+        HandleForwardBackwardMovement(leftPalmPose, rightPalmPose, leftFist, rightFist);
+        HandleVerticalMovement(leftThumbUp, rightThumbUp, leftThumbDown, rightThumbDown);
+        HandleRotation(rightPalmPose, leftFist, rightFist);
+    }
+
+    private void HandleForwardBackwardMovement(Pose leftPalmPose, Pose rightPalmPose, bool leftFist, bool rightFist)
+    {
+        // Both fists = forward/backward movement.
         if (leftFist && rightFist)
         {
             Vector3 fistCenter = (leftPalmPose.position + rightPalmPose.position) / 2f;
@@ -88,47 +105,68 @@ public class Travel : MonoBehaviour
 
             Vector3 worldOffset = fistCenter - neutralFistCenter;
 
-            // Use headset direction for forward/backward movement.
             Vector3 forwardDirection = headsetCamera != null ? headsetCamera.forward : drone.forward;
             forwardDirection.y = 0f;
             forwardDirection.Normalize();
 
-            float forwardAmount = Vector3.Dot(worldOffset, forwardDirection);
+            // Push fists forward = move forward.
+            float forwardAmount = -Vector3.Dot(worldOffset, forwardDirection);
 
             if (Mathf.Abs(forwardAmount) > movementDeadZone)
             {
-                float speed = forwardAmount * forwardSpeedMultiplier;
-                speed = Mathf.Clamp(speed, -maxBackwardSpeed, maxForwardSpeed);
-
-                drone.position += forwardDirection * speed * Time.deltaTime;
-            }
-
-            float verticalAmount = worldOffset.y;
-
-            if (Mathf.Abs(verticalAmount) > verticalDeadZone)
-            {
-                float verticalSpeed = verticalAmount * verticalSpeedMultiplier;
-                verticalSpeed = Mathf.Clamp(verticalSpeed, -maxVerticalSpeed, maxVerticalSpeed);
-
-                drone.position += Vector3.up * verticalSpeed * Time.deltaTime;
+                float speed = forwardAmount > 0f ? forwardSpeed : backwardSpeed;
+                drone.position += forwardDirection * Mathf.Sign(forwardAmount) * speed * Time.deltaTime;
             }
         }
         else
         {
             hasNeutralFistPosition = false;
         }
+    }
 
-        Vector3 leftPalmUp = leftPalmPose.rotation * Vector3.up;
-        Vector3 rightPalmUp = rightPalmPose.rotation * Vector3.up;
-
-        Vector3 localLeftUp = drone.InverseTransformDirection(leftPalmUp);
-        Vector3 localRightUp = drone.InverseTransformDirection(rightPalmUp);
-
-        float turnAmount = localRightUp.x - localLeftUp.x;
-
-        if (Mathf.Abs(turnAmount) > turnDeadZone)
+    private void HandleVerticalMovement(bool leftThumbUp, bool rightThumbUp, bool leftThumbDown, bool rightThumbDown)
+    {
+        // Both thumbs up = move up.
+        if (leftThumbUp && rightThumbUp)
         {
-            drone.Rotate(Vector3.up, turnAmount * turnSpeed * Time.deltaTime, Space.World);
+            drone.position += Vector3.up * verticalSpeed * Time.deltaTime;
+        }
+        // Both thumbs down = move down.
+        else if (leftThumbDown && rightThumbDown)
+        {
+            drone.position += Vector3.down * verticalSpeed * Time.deltaTime;
+        }
+    }
+
+    private void HandleRotation(Pose rightPalmPose, bool leftFist, bool rightFist)
+    {
+        // Right fist only = rotation mode.
+        // Release right fist to reset your hand without rotating the drone back.
+        if (rightFist && !leftFist)
+        {
+            if (!isRotating)
+            {
+                lastRightPalmRotation = rightPalmPose.rotation;
+                isRotating = true;
+            }
+
+            Quaternion deltaRotation = rightPalmPose.rotation * Quaternion.Inverse(lastRightPalmRotation);
+
+            float yawDelta = deltaRotation.eulerAngles.y;
+
+            if (yawDelta > 180f)
+                yawDelta -= 360f;
+
+            if (Mathf.Abs(yawDelta) > turnDeadZone)
+            {
+                drone.Rotate(Vector3.up, yawDelta * turnSpeed * Time.deltaTime, Space.World);
+            }
+
+            lastRightPalmRotation = rightPalmPose.rotation;
+        }
+        else
+        {
+            isRotating = false;
         }
     }
 
@@ -181,7 +219,26 @@ public class Travel : MonoBehaviour
             return false;
 
         float averageDistance = totalDistance / count;
-
         return averageDistance < fistThreshold;
+    }
+
+    private bool IsThumbUp(XRHand hand, Vector3 palmPosition)
+    {
+        XRHandJoint thumbTip = hand.GetJoint(XRHandJointID.ThumbTip);
+
+        if (!thumbTip.TryGetPose(out Pose thumbPose))
+            return false;
+
+        return thumbPose.position.y - palmPosition.y > thumbHeightThreshold;
+    }
+
+    private bool IsThumbDown(XRHand hand, Vector3 palmPosition)
+    {
+        XRHandJoint thumbTip = hand.GetJoint(XRHandJointID.ThumbTip);
+
+        if (!thumbTip.TryGetPose(out Pose thumbPose))
+            return false;
+
+        return palmPosition.y - thumbPose.position.y > thumbHeightThreshold;
     }
 }
