@@ -139,6 +139,7 @@ public class Gameplay : MonoBehaviour
 
         lastClearedCheckpointIndex = 0;
         currentCheckpointIndex = 1;
+        RefreshCheckpointVisuals();
 
         MoveDroneToCheckpoint(0);
     }
@@ -189,6 +190,7 @@ public class Gameplay : MonoBehaviour
         {
             lastClearedCheckpointIndex = currentCheckpointIndex;
             currentCheckpointIndex++;
+            RefreshCheckpointVisuals();
 
             if (currentCheckpointIndex >= checkpoints.Count)
             {
@@ -300,6 +302,7 @@ public class Gameplay : MonoBehaviour
     {
         raceFinished = true;
         timerRunning = false;
+        RefreshCheckpointVisuals();
         raceAudio?.SetEngineActive(false);
         raceAudio?.PlayFinish();
 
@@ -307,6 +310,36 @@ public class Gameplay : MonoBehaviour
             travelScript.canMove = false;
 
         currentMessage = "Finished!";
+    }
+
+    private void RefreshCheckpointVisuals()
+    {
+        for (int index = 0; index < checkpoints.Count; index++)
+        {
+            Transform checkpointTransform = checkpoints[index];
+            if (checkpointTransform == null)
+                continue;
+
+            RaceCheckpoint checkpoint = checkpointTransform.GetComponent<RaceCheckpoint>();
+            if (checkpoint == null)
+                continue;
+
+            CheckpointVisualState state;
+            if (index <= lastClearedCheckpointIndex)
+            {
+                state = CheckpointVisualState.Completed;
+            }
+            else if (!raceFinished && index == currentCheckpointIndex)
+            {
+                state = CheckpointVisualState.Active;
+            }
+            else
+            {
+                state = CheckpointVisualState.Pending;
+            }
+
+            checkpoint.SetState(state);
+        }
     }
 
     private IEnumerator ClearMessageAfterDelay(float delay)
