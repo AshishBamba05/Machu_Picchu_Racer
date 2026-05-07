@@ -5,7 +5,7 @@ using UnityEngine;
 
 public class GhostChampion : MonoBehaviour
 {
-    private static readonly Color GhostColor = new Color(0.35f, 0.95f, 1f, 0.32f);
+    private static readonly Color GhostColor = new Color(1f, 0.15f, 0.15f, 0.88f);
 
     [Serializable]
     public class GhostFrame
@@ -30,7 +30,7 @@ public class GhostChampion : MonoBehaviour
     public float samplesPerSecond = 90f;
 
     [Header("Ghost Visual")]
-    public bool hideGhostWhenNotPlaying = true;
+    public bool hideGhostWhenNotPlaying = false;
 
     [Header("Debug")]
     [SerializeField] private bool enableDebugLogs = true;
@@ -301,29 +301,21 @@ public class GhostChampion : MonoBehaviour
         ghostRoot.transform.SetParent(transform, false);
         ghostDrone = ghostRoot.transform;
 
-        CreateGhostPrimitive(ghostDrone, PrimitiveType.Cube, "Core", Vector3.zero, new Vector3(0.28f, 0.08f, 0.32f), Vector3.zero);
-        CreateGhostPrimitive(ghostDrone, PrimitiveType.Cylinder, "Arm A", Vector3.zero, new Vector3(0.03f, 0.34f, 0.03f), new Vector3(0f, 0f, 45f));
-        CreateGhostPrimitive(ghostDrone, PrimitiveType.Cylinder, "Arm B", Vector3.zero, new Vector3(0.03f, 0.34f, 0.03f), new Vector3(0f, 0f, -45f));
-        CreateGhostPrimitive(ghostDrone, PrimitiveType.Capsule, "Nose", new Vector3(0f, 0f, 0.3f), new Vector3(0.08f, 0.18f, 0.14f), new Vector3(90f, 0f, 0f));
+        CreateGhostPrimitive(
+            ghostDrone,
+            PrimitiveType.Cube,
+            "Ghost Body",
+            Vector3.zero,
+            new Vector3(0.55f, 0.22f, 0.8f),
+            Vector3.zero);
 
-        Vector3[] propOffsets =
-        {
-            new Vector3(0.48f, 0f, 0.48f),
-            new Vector3(-0.48f, 0f, 0.48f),
-            new Vector3(0.48f, 0f, -0.48f),
-            new Vector3(-0.48f, 0f, -0.48f)
-        };
-
-        for (int index = 0; index < propOffsets.Length; index++)
-        {
-            CreateGhostPrimitive(
-                ghostDrone,
-                PrimitiveType.Sphere,
-                $"Prop {index + 1}",
-                propOffsets[index],
-                Vector3.one * 0.12f,
-                Vector3.zero);
-        }
+        CreateGhostPrimitive(
+            ghostDrone,
+            PrimitiveType.Cube,
+            "Ghost Nose",
+            new Vector3(0f, 0f, 0.52f),
+            new Vector3(0.18f, 0.18f, 0.22f),
+            Vector3.zero);
 
         if (hideGhostWhenNotPlaying)
             ghostDrone.gameObject.SetActive(false);
