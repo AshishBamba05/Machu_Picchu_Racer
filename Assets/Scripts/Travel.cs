@@ -11,7 +11,7 @@ public class Travel : MonoBehaviour
     [Header("Speeds")]
     public float moveSpeed = 35f;
     public float verticalSpeed = 20f;
-    public float rotationSpeed = 180f;
+    public float rotationSpeed = 240f;
 
     [Header("Right Hand Thresholds")]
     public float fistThreshold = 0.075f;
@@ -19,7 +19,7 @@ public class Travel : MonoBehaviour
     public float thumbNeutralThreshold = 0.04f;
 
     [Header("Left Thumb Rotation")]
-    public float leftThumbRotationDeadZone = 0.12f;
+    public float leftThumbRotationDeadZone = 0.08f;
     public bool invertLeftThumbRotation = false;
 
     [Header("Gameplay Lock")]
