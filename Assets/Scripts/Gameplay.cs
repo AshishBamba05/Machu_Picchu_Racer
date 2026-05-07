@@ -98,9 +98,11 @@ public class Gameplay : MonoBehaviour
         }
 
         SetupDroneAtStart();
+        currentMessage = "";
 
         yield return StartCoroutine(StartCountdown());
 
+        currentMessage = "";
         raceReady = true;
     }
 
