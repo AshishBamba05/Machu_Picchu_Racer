@@ -855,17 +855,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Travel
   drone: {fileID: 1085439597}
-  headsetCamera: {fileID: 0}
-  forwardSpeedMultiplier: 4
-  maxForwardSpeed: 8
-  maxBackwardSpeed: 4
-  movementDeadZone: 0.08
-  verticalSpeedMultiplier: 4
-  maxVerticalSpeed: 5
-  verticalDeadZone: 0.08
-  turnSpeed: 80
-  turnDeadZone: 0.15
+  moveSpeed: 45
+  verticalSpeed: 35
+  rotationSpeed: 140
   fistThreshold: 0.09
+  thumbHeightThreshold: 0.08
+  thumbNeutralThreshold: 0.04
+  leftThumbRotationDeadZone: 0.08
+  invertLeftThumbRotation: 0
   canMove: 1
 --- !u!114 &1085439599
 MonoBehaviour:
