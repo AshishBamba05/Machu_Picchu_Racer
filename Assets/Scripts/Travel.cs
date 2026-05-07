@@ -9,13 +9,14 @@ public class Travel : MonoBehaviour
     public Transform drone;
 
     [Header("Speeds")]
-    public float moveSpeed = 0.5f;
-    public float verticalSpeed = 2f;
+    public float moveSpeed = 0.25f;
+    public float verticalSpeed = 0.8f;
     public float rotationSpeed = 14f;
 
     [Header("Right Hand Thresholds")]
     public float fistThreshold = 0.075f;
-    public float thumbHeightThreshold = 0.05f;
+    public float thumbHeightThreshold = 0.06f;
+    public float thumbSideThreshold = 0.04f;
 
     [Header("Left Thumb Rotation")]
     public float leftThumbRotationDeadZone = 0.25f;
@@ -62,38 +63,36 @@ public class Travel : MonoBehaviour
         if (!TryGetPalmPose(rightHand, out Pose palmPose))
             return;
 
-        bool thumbUp = IsThumbUp(rightHand, palmPose.position);
-        bool thumbDown = IsThumbDown(rightHand, palmPose.position);
+        bool fist = IsFistWithoutThumb(rightHand, palmPose.position);
 
-        // Up/down comes first, so it stops forward movement.
-        if (thumbUp)
+        // No fist = no right-hand movement
+        if (!fist)
+            return;
+
+        bool fistThumbUp = IsFistThumbUp(rightHand, palmPose.position);
+        bool fistThumbDown = IsFistThumbDown(rightHand, palmPose.position);
+
+        // Fist + thumb up/down = vertical only
+        if (fistThumbUp)
         {
             drone.position += Vector3.up * verticalSpeed * Time.deltaTime;
             return;
         }
 
-        if (thumbDown)
+        if (fistThumbDown)
         {
             drone.position += Vector3.down * verticalSpeed * Time.deltaTime;
             return;
         }
 
-        bool fist = IsFist(rightHand, palmPose.position);
-
-        // Fist = forward only
-        if (fist)
-        {
-            drone.position += drone.forward * moveSpeed * Time.deltaTime;
-        }
+        // Plain fist = forward only
+        drone.position += drone.forward * moveSpeed * Time.deltaTime;
     }
 
     private void HandleLeftThumbRotation(XRHand leftHand)
     {
-        XRHandJoint thumbTip =
-            leftHand.GetJoint(XRHandJointID.ThumbTip);
-
-        XRHandJoint thumbBase =
-            leftHand.GetJoint(XRHandJointID.ThumbProximal);
+        XRHandJoint thumbTip = leftHand.GetJoint(XRHandJointID.ThumbTip);
+        XRHandJoint thumbBase = leftHand.GetJoint(XRHandJointID.ThumbProximal);
 
         if (!thumbTip.TryGetPose(out Pose tipPose))
             return;
@@ -108,7 +107,6 @@ public class Travel : MonoBehaviour
 
         thumbDirection.Normalize();
 
-        // Thumb world left/right controls rotation.
         float turnAmount = thumbDirection.x;
 
         if (invertLeftThumbRotation)
@@ -131,6 +129,63 @@ public class Travel : MonoBehaviour
         }
     }
 
+    private bool IsFistWithoutThumb(XRHand hand, Vector3 palmPosition)
+    {
+        XRHandJointID[] fingerTips =
+        {
+            XRHandJointID.IndexTip,
+            XRHandJointID.MiddleTip,
+            XRHandJointID.RingTip,
+            XRHandJointID.LittleTip
+        };
+
+        int curledCount = 0;
+
+        foreach (XRHandJointID jointID in fingerTips)
+        {
+            XRHandJoint joint = hand.GetJoint(jointID);
+
+            if (joint.TryGetPose(out Pose tipPose))
+            {
+                float distance = Vector3.Distance(
+                    tipPose.position,
+                    palmPosition
+                );
+
+                if (distance < fistThreshold)
+                    curledCount++;
+            }
+        }
+
+        // Require all four fingers curled.
+        // Thumb is NOT included, so thumb can still point up/down.
+        return curledCount >= 4;
+    }
+
+    private bool IsFistThumbUp(XRHand hand, Vector3 palmPosition)
+    {
+        XRHandJoint thumbTip = hand.GetJoint(XRHandJointID.ThumbTip);
+
+        if (!thumbTip.TryGetPose(out Pose thumbPose))
+            return false;
+
+        float verticalOffset = thumbPose.position.y - palmPosition.y;
+
+        return verticalOffset > thumbHeightThreshold;
+    }
+
+    private bool IsFistThumbDown(XRHand hand, Vector3 palmPosition)
+    {
+        XRHandJoint thumbTip = hand.GetJoint(XRHandJointID.ThumbTip);
+
+        if (!thumbTip.TryGetPose(out Pose thumbPose))
+            return false;
+
+        float verticalOffset = palmPosition.y - thumbPose.position.y;
+
+        return verticalOffset > thumbHeightThreshold;
+    }
+
     private void OnTriggerEnter(Collider other)
     {
         TriggerEntered?.Invoke(other);
@@ -151,61 +206,5 @@ public class Travel : MonoBehaviour
     {
         XRHandJoint palm = hand.GetJoint(XRHandJointID.Palm);
         return palm.TryGetPose(out pose);
-    }
-
-    private bool IsFist(XRHand hand, Vector3 palmPosition)
-    {
-        float totalDistance = 0f;
-        int count = 0;
-
-        XRHandJointID[] fingerTips =
-        {
-            XRHandJointID.IndexTip,
-            XRHandJointID.MiddleTip,
-            XRHandJointID.RingTip,
-            XRHandJointID.LittleTip
-        };
-
-        foreach (XRHandJointID jointID in fingerTips)
-        {
-            XRHandJoint joint = hand.GetJoint(jointID);
-
-            if (joint.TryGetPose(out Pose tipPose))
-            {
-                totalDistance += Vector3.Distance(
-                    tipPose.position,
-                    palmPosition
-                );
-
-                count++;
-            }
-        }
-
-        if (count == 0)
-            return false;
-
-        float averageDistance = totalDistance / count;
-
-        return averageDistance < fistThreshold;
-    }
-
-    private bool IsThumbUp(XRHand hand, Vector3 palmPosition)
-    {
-        XRHandJoint thumbTip = hand.GetJoint(XRHandJointID.ThumbTip);
-
-        if (!thumbTip.TryGetPose(out Pose thumbPose))
-            return false;
-
-        return thumbPose.position.y - palmPosition.y > thumbHeightThreshold;
-    }
-
-    private bool IsThumbDown(XRHand hand, Vector3 palmPosition)
-    {
-        XRHandJoint thumbTip = hand.GetJoint(XRHandJointID.ThumbTip);
-
-        if (!thumbTip.TryGetPose(out Pose thumbPose))
-            return false;
-
-        return palmPosition.y - thumbPose.position.y > thumbHeightThreshold;
     }
 }
