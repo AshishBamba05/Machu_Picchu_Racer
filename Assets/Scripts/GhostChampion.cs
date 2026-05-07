@@ -187,10 +187,7 @@ public class GhostChampion : MonoBehaviour
 
         if (replayTime >= bestRun.totalTime)
         {
-            GhostFrame finalFrame = bestRun.frames[bestRun.frames.Count - 1];
-            ghostDrone.position = finalFrame.position;
-            ghostDrone.rotation = finalFrame.rotation;
-            isReplaying = false;
+            StopGhostReplay();
             return;
         }
 
