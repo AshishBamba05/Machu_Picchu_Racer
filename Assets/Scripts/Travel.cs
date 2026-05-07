@@ -9,9 +9,9 @@ public class Travel : MonoBehaviour
     public Transform drone;
 
     [Header("Speeds")]
-    public float moveSpeed = 0.2f;
-    public float verticalSpeed = 0.35f;
-    public float rotationSpeed = 40f;
+    public float moveSpeed = 50f;
+    public float verticalSpeed = 40f;
+    public float rotationSpeed = 60f;
 
     [Header("Right Hand Thresholds")]
     public float fistThreshold = 0.075f;
