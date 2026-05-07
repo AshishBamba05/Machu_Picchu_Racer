@@ -187,7 +187,10 @@ public class GhostChampion : MonoBehaviour
 
         if (replayTime >= bestRun.totalTime)
         {
-            StopGhostReplay();
+            GhostFrame finalFrame = bestRun.frames[bestRun.frames.Count - 1];
+            ghostDrone.position = finalFrame.position;
+            ghostDrone.rotation = finalFrame.rotation;
+            isReplaying = false;
             return;
         }
 
@@ -306,15 +309,15 @@ public class GhostChampion : MonoBehaviour
             PrimitiveType.Cube,
             "Ghost Body",
             Vector3.zero,
-            new Vector3(0.55f, 0.22f, 0.8f),
+            new Vector3(0.95f, 0.38f, 1.25f),
             Vector3.zero);
 
         CreateGhostPrimitive(
             ghostDrone,
             PrimitiveType.Cube,
             "Ghost Nose",
-            new Vector3(0f, 0f, 0.52f),
-            new Vector3(0.18f, 0.18f, 0.22f),
+            new Vector3(0f, 0f, 0.78f),
+            new Vector3(0.28f, 0.24f, 0.32f),
             Vector3.zero);
 
         if (hideGhostWhenNotPlaying)
