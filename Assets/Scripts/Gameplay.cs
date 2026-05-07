@@ -5,6 +5,9 @@ using TMPro;
 
 public class Gameplay : MonoBehaviour
 {
+    private const string VisibleGameplayTextName = "Text (TMP)";
+    private const string CountdownOverlayName = "Countdown Overlay Text";
+
     [Header("References")]
     public Travel travelScript;
     public Transform drone;
@@ -36,11 +39,18 @@ public class Gameplay : MonoBehaviour
     private bool raceReady = false;
 
     private string currentMessage = "";
+    private TMP_Text countdownText;
 
     private void Start()
     {
         if (drone == null)
             drone = transform;
+
+        if (gameplayText == null)
+            gameplayText = FindVisibleGameplayText();
+
+        ConfigureGameplayHud();
+        EnsureCountdownOverlay();
 
         if (travelScript == null)
             travelScript = drone.GetComponent<Travel>();
@@ -131,17 +141,17 @@ public class Gameplay : MonoBehaviour
 
         while (count > 0)
         {
-            currentMessage = "Starting in " + Mathf.CeilToInt(count);
+            SetCountdownOverlay(Mathf.CeilToInt(count).ToString(), new Color(1f, 0.95f, 0.7f));
 
             yield return new WaitForSeconds(1f);
             count--;
         }
 
-        currentMessage = "GO!";
+        SetCountdownOverlay("GO!", new Color(0.55f, 1f, 0.65f));
 
         yield return new WaitForSeconds(1f);
 
-        currentMessage = "";
+        SetCountdownOverlay(string.Empty, Color.white);
 
         timerRunning = true;
 
@@ -292,24 +302,32 @@ public class Gameplay : MonoBehaviour
             return;
 
         string timerString = "Time: " + FormatTime(timer);
+        int checkpointsPassed = checkpoints.Count == 0
+            ? 0
+            : Mathf.Clamp(lastClearedCheckpointIndex + 1, 0, checkpoints.Count);
 
         string checkpointString;
+        string distanceString;
 
         if (raceFinished)
         {
             checkpointString =
                 "Checkpoints: " +
                 checkpoints.Count + "/" + checkpoints.Count;
+            distanceString = "Distance: 0.0m";
         }
         else
         {
+            float distanceToNextCheckpoint = GetDistanceToNextCheckpoint();
+
             checkpointString =
                 "Checkpoints: " +
-                (lastClearedCheckpointIndex + 1) +
+                checkpointsPassed +
                 "/" +
                 checkpoints.Count +
                 "\nNext: " +
                 (currentCheckpointIndex + 1);
+            distanceString = "Distance: " + distanceToNextCheckpoint.ToString("0.0") + "m";
         }
 
         gameplayText.text =
@@ -317,7 +335,114 @@ public class Gameplay : MonoBehaviour
             "\n" +
             checkpointString +
             "\n" +
+            distanceString +
+            "\n" +
             currentMessage;
+    }
+
+    private void ConfigureGameplayHud()
+    {
+        if (gameplayText == null)
+            return;
+
+        if (gameplayText is TextMeshProUGUI uiText)
+        {
+            RectTransform textRect = uiText.rectTransform;
+            textRect.anchorMin = new Vector2(0.5f, 0.5f);
+            textRect.anchorMax = new Vector2(0.5f, 0.5f);
+            textRect.pivot = new Vector2(0.5f, 0.5f);
+            textRect.anchoredPosition = Vector2.zero;
+            textRect.sizeDelta = new Vector2(560f, 220f);
+
+            uiText.fontSize = 40f;
+            uiText.alignment = TextAlignmentOptions.TopRight;
+            uiText.enableWordWrapping = false;
+
+            Canvas hudCanvas = uiText.GetComponentInParent<Canvas>();
+            if (hudCanvas != null)
+            {
+                RectTransform canvasRect = hudCanvas.GetComponent<RectTransform>();
+                canvasRect.localPosition = new Vector3(0.42f, 0.28f, 1.2f);
+                canvasRect.localRotation = Quaternion.identity;
+                canvasRect.localScale = new Vector3(0.0015f, 0.0015f, 0.0015f);
+                canvasRect.sizeDelta = new Vector2(640f, 240f);
+            }
+        }
+    }
+
+    private void EnsureCountdownOverlay()
+    {
+        if (countdownText != null)
+            return;
+
+        Camera mainCamera = Camera.main;
+        if (mainCamera == null)
+            return;
+
+        Transform existing = mainCamera.transform.Find(CountdownOverlayName);
+        if (existing != null)
+        {
+            countdownText = existing.GetComponent<TMP_Text>();
+            return;
+        }
+
+        GameObject countdownObject = new GameObject(CountdownOverlayName);
+        countdownObject.transform.SetParent(mainCamera.transform, false);
+        countdownObject.transform.localPosition = new Vector3(0f, 0f, 1.05f);
+        countdownObject.transform.localRotation = Quaternion.identity;
+        countdownObject.transform.localScale = Vector3.one * 0.0022f;
+
+        TextMeshPro countdownWorldText = countdownObject.AddComponent<TextMeshPro>();
+        countdownWorldText.font = TMP_Settings.defaultFontAsset;
+        countdownWorldText.alignment = TextAlignmentOptions.Center;
+        countdownWorldText.fontSize = 5.8f;
+        countdownWorldText.color = new Color(1f, 0.95f, 0.7f);
+        countdownWorldText.enableWordWrapping = false;
+        countdownWorldText.overflowMode = TextOverflowModes.Overflow;
+        countdownWorldText.rectTransform.sizeDelta = new Vector2(900f, 320f);
+        countdownWorldText.text = string.Empty;
+
+        countdownText = countdownWorldText;
+    }
+
+    private void SetCountdownOverlay(string message, Color color)
+    {
+        EnsureCountdownOverlay();
+
+        if (countdownText == null)
+            return;
+
+        countdownText.text = message;
+        countdownText.color = color;
+        countdownText.gameObject.SetActive(!string.IsNullOrEmpty(message));
+    }
+
+    private float GetDistanceToNextCheckpoint()
+    {
+        if (drone == null || currentCheckpointIndex < 0 || currentCheckpointIndex >= checkpoints.Count)
+            return 0f;
+
+        Transform nextCheckpoint = checkpoints[currentCheckpointIndex];
+        if (nextCheckpoint == null)
+            return 0f;
+
+        return Vector3.Distance(drone.position, nextCheckpoint.position);
+    }
+
+    private TMP_Text FindVisibleGameplayText()
+    {
+        TMP_Text[] texts = FindObjectsOfType<TMP_Text>(true);
+
+        foreach (TMP_Text text in texts)
+        {
+            if (text == null)
+                continue;
+
+            if (text.name == VisibleGameplayTextName)
+                return text;
+        }
+
+        return null;
     }
 
     private string FormatTime(float time)

@@ -883,7 +883,7 @@ MonoBehaviour:
   drone: {fileID: 1085439597}
   droneVisualRoot: {fileID: 0}
   hideDroneVisual: 1
-  gameplayText: {fileID: 0}
+  gameplayText: {fileID: 674627972}
   startCountdownTime: 3
   crashPenaltyTime: 3
   checkpointReachRadius: 9.144
