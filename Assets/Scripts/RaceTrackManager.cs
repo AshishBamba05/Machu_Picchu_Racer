@@ -30,6 +30,7 @@ public class RaceTrackManager : MonoBehaviour
     private Camera racerCamera;
     private Transform racer;
     private Travel travelController;
+    private DroneRaceAudio raceAudio;
     private DroneViewModeController viewModeController;
     private Transform hudRoot;
     private TextMeshPro hudText;
@@ -49,6 +50,7 @@ public class RaceTrackManager : MonoBehaviour
     private float raceStartTime;
     private float finishTime;
     private float bestTime = -1f;
+    private int lastCountdownSecond = -1;
     private string statusMessage = "Waiting for hand-tracked drone setup.";
     private string loadedTrackLabel = "No track loaded.";
 
@@ -135,6 +137,15 @@ public class RaceTrackManager : MonoBehaviour
         travelController.canMove = false;
         travelController.TriggerEntered -= HandleRacerTriggerEntered;
         travelController.TriggerEntered += HandleRacerTriggerEntered;
+
+        raceAudio = racer.GetComponent<DroneRaceAudio>();
+        if (raceAudio == null)
+        {
+            raceAudio = racer.gameObject.AddComponent<DroneRaceAudio>();
+        }
+
+        raceAudio.Initialize(racer);
+        raceAudio.SetEngineActive(false);
 
         viewModeController = racer.GetComponent<DroneViewModeController>();
         if (viewModeController == null)
@@ -715,6 +726,7 @@ public class RaceTrackManager : MonoBehaviour
         nextCheckpointIndex = 1;
         lastClearedCheckpointIndex = 0;
         finishTime = 0f;
+        lastCountdownSecond = -1;
         statusMessage = "Race ready. Hold position for countdown.";
 
         for (var index = 0; index < checkpoints.Count; index++)
@@ -733,17 +745,33 @@ public class RaceTrackManager : MonoBehaviour
         }
 
         travelController.canMove = false;
+        raceAudio?.SetEngineActive(false);
     }
 
     private void UpdateCountdown()
     {
-        if (!countdownActive || Time.time < countdownEndTime)
+        if (!countdownActive)
+        {
+            return;
+        }
+
+        var remainingSeconds = Mathf.CeilToInt(Mathf.Max(0f, countdownEndTime - Time.time));
+        if (remainingSeconds > 0 && remainingSeconds != lastCountdownSecond)
+        {
+            lastCountdownSecond = remainingSeconds;
+            raceAudio?.PlayCountdownTick(remainingSeconds);
+        }
+
+        if (Time.time < countdownEndTime)
         {
             return;
         }
 
         countdownActive = false;
+        lastCountdownSecond = -1;
         travelController.canMove = !raceFinished;
+        raceAudio?.PlayCountdownGo();
+        raceAudio?.SetEngineActive(!raceFinished);
 
         if (initialCountdownPending)
         {
@@ -780,6 +808,7 @@ public class RaceTrackManager : MonoBehaviour
 
         checkpoints[nextCheckpointIndex].SetState(CheckpointVisualState.Active);
         statusMessage = $"Checkpoint {lastClearedCheckpointIndex + 1} cleared.";
+        raceAudio?.PlayCheckpoint();
     }
 
     private void UpdateCourseWarning()
@@ -886,6 +915,8 @@ public class RaceTrackManager : MonoBehaviour
         finishTime = Time.time - raceStartTime;
         bestTime = bestTime < 0f ? finishTime : Mathf.Min(bestTime, finishTime);
         statusMessage = "Finish line cleared.";
+        raceAudio?.SetEngineActive(false);
+        raceAudio?.PlayFinish();
     }
 
     private void HandleRacerTriggerEntered(Collider other)
@@ -913,7 +944,10 @@ public class RaceTrackManager : MonoBehaviour
         travelController.canMove = false;
         countdownActive = true;
         countdownEndTime = Time.time + CountdownDuration;
+        lastCountdownSecond = -1;
         statusMessage = "Crash detected. Returning to last cleared checkpoint.";
+        raceAudio?.SetEngineActive(false);
+        raceAudio?.PlayCrash();
         RespawnAtCheckpoint(lastClearedCheckpointIndex);
     }
 
