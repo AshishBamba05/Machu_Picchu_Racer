@@ -666,23 +666,26 @@ public class RaceTrackManager : MonoBehaviour
 
         for (var index = 0; index < checkpointPositions.Count; index++)
         {
-            var nextPosition = checkpointPositions[Mathf.Min(index + 1, checkpointPositions.Count - 1)];
+            var previousPosition = index > 0
+                ? checkpointPositions[index - 1]
+                : checkpointPositions[index];
+            var facingPosition = checkpointPositions[Mathf.Min(index + 1, checkpointPositions.Count - 1)];
             if (index == checkpointPositions.Count - 1)
             {
-                nextPosition = checkpointPositions[index];
+                facingPosition = checkpointPositions[index];
             }
 
-            checkpoints.Add(CreateCheckpoint(index, checkpointPositions[index], nextPosition));
+            checkpoints.Add(CreateCheckpoint(index, checkpointPositions[index], previousPosition, facingPosition));
         }
     }
 
-    private RaceCheckpoint CreateCheckpoint(int index, Vector3 position, Vector3 nextPosition)
+    private RaceCheckpoint CreateCheckpoint(int index, Vector3 position, Vector3 previousPosition, Vector3 facingPosition)
     {
         var checkpointRoot = new GameObject($"Checkpoint {index + 1}");
         checkpointRoot.transform.SetParent(transform, false);
         checkpointRoot.transform.position = position;
         checkpointRoot.transform.rotation = Quaternion.LookRotation(
-            (nextPosition - position).sqrMagnitude > 0.001f ? nextPosition - position : Vector3.forward,
+            (facingPosition - position).sqrMagnitude > 0.001f ? facingPosition - position : Vector3.forward,
             Vector3.up);
 
         var trigger = checkpointRoot.AddComponent<SphereCollider>();
@@ -692,7 +695,7 @@ public class RaceTrackManager : MonoBehaviour
         var checkpoint = checkpointRoot.AddComponent<RaceCheckpoint>();
         checkpoint.Initialize(this, index);
 
-        checkpoint.CacheRenderers(nextPosition);
+        checkpoint.CacheRenderers(previousPosition);
         checkpoint.SetState(CheckpointVisualState.Pending);
         return checkpoint;
     }

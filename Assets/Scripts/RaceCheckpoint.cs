@@ -38,7 +38,7 @@ public class RaceCheckpoint : MonoBehaviour
         return raceManager == manager;
     }
 
-    public void CacheRenderers(Vector3 nextCheckpointPosition)
+    public void CacheRenderers(Vector3 previousCheckpointPosition)
     {
         var checkpointSphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         checkpointSphere.name = "Checkpoint Core";
@@ -48,13 +48,13 @@ public class RaceCheckpoint : MonoBehaviour
         Object.Destroy(checkpointSphere.GetComponent<Collider>());
 
         var sphereRadius = checkpointSphereDiameter * 0.5f;
-        var toNextCheckpoint = nextCheckpointPosition - transform.position;
-        if (toNextCheckpoint.sqrMagnitude > 0.001f)
+        var toPreviousCheckpoint = previousCheckpointPosition - transform.position;
+        if (toPreviousCheckpoint.sqrMagnitude > 0.001f)
         {
-            var connectorLength = Mathf.Max(0f, toNextCheckpoint.magnitude - checkpointSphereDiameter);
+            var connectorLength = Mathf.Max(0f, toPreviousCheckpoint.magnitude - checkpointSphereDiameter);
             if (connectorLength > 0.001f)
             {
-                var connectorDirection = toNextCheckpoint.normalized;
+                var connectorDirection = toPreviousCheckpoint.normalized;
                 var connectorOffset = connectorDirection * (sphereRadius + connectorLength * 0.5f);
 
                 var poleObject = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
