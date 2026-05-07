@@ -18,8 +18,8 @@ public class Travel : MonoBehaviour
     public float thumbHeightThreshold = 0.08f;
 
     [Header("Rotation")]
-    public float turnSpeed = 25f;
-    public float turnDeadZone = 20f;
+    public float turnSpeed = 40f;
+    public float turnDeadZone = 12f;
 
     [Header("Gesture Detection")]
     public float fistThreshold = 0.09f;
@@ -31,9 +31,12 @@ public class Travel : MonoBehaviour
 
     private XRHandSubsystem handSubsystem;
 
+    // Forward / backward movement state.
     private bool hasNeutralFistPosition = false;
     private Vector3 neutralFistPosition;
+    private Vector3 neutralForwardDirection;
 
+    // Rotation state.
     private bool hasNeutralPalmRotation = false;
     private Quaternion neutralPalmRotation;
 
@@ -91,25 +94,36 @@ public class Travel : MonoBehaviour
         // Right fist push forward/backward = move forward/backward.
         if (rightFist)
         {
+            // Save starting position and drone direction
+            // when the fist gesture first begins.
             if (!hasNeutralFistPosition)
             {
                 neutralFistPosition = rightPalmPose.position;
+
+                neutralForwardDirection = drone.forward;
+                neutralForwardDirection.y = 0f;
+                neutralForwardDirection.Normalize();
+
                 hasNeutralFistPosition = true;
             }
 
-            Vector3 worldOffset = rightPalmPose.position - neutralFistPosition;
+            Vector3 worldOffset =
+                rightPalmPose.position - neutralFistPosition;
 
-            // Use drone forward direction for stable movement.
-            Vector3 forwardDirection = drone.forward;
-            forwardDirection.y = 0f;
-            forwardDirection.Normalize();
+            // Use saved drone direction so movement
+            // does not glitch while rotating.
+            Vector3 forwardDirection = neutralForwardDirection;
 
             // Push fist forward = move forward.
-            float forwardAmount = -Vector3.Dot(worldOffset, forwardDirection);
+            float forwardAmount =
+                -Vector3.Dot(worldOffset, forwardDirection);
 
             if (Mathf.Abs(forwardAmount) > movementDeadZone)
             {
-                float speed = forwardAmount > 0f ? forwardSpeed : backwardSpeed;
+                float speed =
+                    forwardAmount > 0f ?
+                    forwardSpeed :
+                    backwardSpeed;
 
                 drone.position +=
                     forwardDirection *
@@ -124,22 +138,32 @@ public class Travel : MonoBehaviour
         }
     }
 
-    private void HandleVerticalMovement(bool rightThumbUp, bool rightThumbDown)
+    private void HandleVerticalMovement(
+        bool rightThumbUp,
+        bool rightThumbDown)
     {
         // Right thumb up = move up.
         if (rightThumbUp)
         {
-            drone.position += Vector3.up * verticalSpeed * Time.deltaTime;
+            drone.position +=
+                Vector3.up *
+                verticalSpeed *
+                Time.deltaTime;
         }
         // Right thumb down = move down.
         else if (rightThumbDown)
         {
-            drone.position += Vector3.down * verticalSpeed * Time.deltaTime;
+            drone.position +=
+                Vector3.down *
+                verticalSpeed *
+                Time.deltaTime;
         }
     }
 
     private void HandlePalmRotation(Pose rightPalmPose)
     {
+        // Save neutral wrist rotation when
+        // open palm rotation begins.
         if (!hasNeutralPalmRotation)
         {
             neutralPalmRotation = rightPalmPose.rotation;
@@ -164,7 +188,9 @@ public class Travel : MonoBehaviour
 
         drone.Rotate(
             Vector3.up,
-            turnDirection * turnSpeed * Time.deltaTime,
+            turnDirection *
+            turnSpeed *
+            Time.deltaTime,
             Space.World
         );
     }
@@ -193,7 +219,9 @@ public class Travel : MonoBehaviour
 
     private bool TryGetPalmPose(XRHand hand, out Pose pose)
     {
-        XRHandJoint palm = hand.GetJoint(XRHandJointID.Palm);
+        XRHandJoint palm =
+            hand.GetJoint(XRHandJointID.Palm);
+
         return palm.TryGetPose(out pose);
     }
 
@@ -217,7 +245,9 @@ public class Travel : MonoBehaviour
             if (joint.TryGetPose(out Pose tipPose))
             {
                 totalDistance +=
-                    Vector3.Distance(tipPose.position, palmPosition);
+                    Vector3.Distance(
+                        tipPose.position,
+                        palmPosition);
 
                 count++;
             }
@@ -226,32 +256,41 @@ public class Travel : MonoBehaviour
         if (count == 0)
             return false;
 
-        float averageDistance = totalDistance / count;
+        float averageDistance =
+            totalDistance / count;
 
         return averageDistance < fistThreshold;
     }
 
-    private bool IsThumbUp(XRHand hand, Vector3 palmPosition)
+    private bool IsThumbUp(
+        XRHand hand,
+        Vector3 palmPosition)
     {
-        XRHandJoint thumbTip = hand.GetJoint(XRHandJointID.ThumbTip);
+        XRHandJoint thumbTip =
+            hand.GetJoint(XRHandJointID.ThumbTip);
 
         if (!thumbTip.TryGetPose(out Pose thumbPose))
             return false;
 
         return
-            thumbPose.position.y - palmPosition.y >
+            thumbPose.position.y -
+            palmPosition.y >
             thumbHeightThreshold;
     }
 
-    private bool IsThumbDown(XRHand hand, Vector3 palmPosition)
+    private bool IsThumbDown(
+        XRHand hand,
+        Vector3 palmPosition)
     {
-        XRHandJoint thumbTip = hand.GetJoint(XRHandJointID.ThumbTip);
+        XRHandJoint thumbTip =
+            hand.GetJoint(XRHandJointID.ThumbTip);
 
         if (!thumbTip.TryGetPose(out Pose thumbPose))
             return false;
 
         return
-            palmPosition.y - thumbPose.position.y >
+            palmPosition.y -
+            thumbPose.position.y >
             thumbHeightThreshold;
     }
 }
