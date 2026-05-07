@@ -351,24 +351,24 @@ public class Gameplay : MonoBehaviour
         if (gameplayText is TextMeshProUGUI uiText)
         {
             RectTransform textRect = uiText.rectTransform;
-            textRect.anchorMin = new Vector2(0.5f, 0.5f);
-            textRect.anchorMax = new Vector2(0.5f, 0.5f);
-            textRect.pivot = new Vector2(0.5f, 0.5f);
-            textRect.anchoredPosition = Vector2.zero;
-            textRect.sizeDelta = new Vector2(560f, 220f);
+            textRect.anchorMin = new Vector2(0.5f, 1f);
+            textRect.anchorMax = new Vector2(0.5f, 1f);
+            textRect.pivot = new Vector2(0.5f, 1f);
+            textRect.anchoredPosition = new Vector2(0f, -12f);
+            textRect.sizeDelta = new Vector2(720f, 220f);
 
             uiText.fontSize = 40f;
-            uiText.alignment = TextAlignmentOptions.TopRight;
+            uiText.alignment = TextAlignmentOptions.Top;
             uiText.enableWordWrapping = false;
 
             Canvas hudCanvas = uiText.GetComponentInParent<Canvas>();
             if (hudCanvas != null)
             {
                 RectTransform canvasRect = hudCanvas.GetComponent<RectTransform>();
-                canvasRect.localPosition = new Vector3(0.42f, 0.28f, 1.2f);
+                canvasRect.localPosition = new Vector3(0f, 0.34f, 1.2f);
                 canvasRect.localRotation = Quaternion.identity;
                 canvasRect.localScale = new Vector3(0.0015f, 0.0015f, 0.0015f);
-                canvasRect.sizeDelta = new Vector2(640f, 240f);
+                canvasRect.sizeDelta = new Vector2(760f, 240f);
             }
         }
     }
