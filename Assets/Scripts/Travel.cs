@@ -8,21 +8,18 @@ public class Travel : MonoBehaviour
     [Header("Drone")]
     public Transform drone;
 
-    [Header("Headset")]
-    public Transform headsetCamera;
-
     [Header("Forward / Backward Movement")]
     public float forwardSpeed = 60f;
     public float backwardSpeed = 50f;
-    public float movementDeadZone = 0.012f;
+    public float movementDeadZone = 0.015f;
 
     [Header("Up / Down Movement")]
     public float verticalSpeed = 35f;
     public float thumbHeightThreshold = 0.08f;
 
     [Header("Rotation")]
-    public float turnSpeed = 2.5f;
-    public float turnDeadZone = 8f;
+    public float turnSpeed = 25f;
+    public float turnDeadZone = 20f;
 
     [Header("Gesture Detection")]
     public float fistThreshold = 0.09f;
@@ -44,9 +41,6 @@ public class Travel : MonoBehaviour
     {
         if (drone == null)
             drone = transform;
-
-        if (headsetCamera == null && Camera.main != null)
-            headsetCamera = Camera.main.transform;
 
         TryInitializeHands();
     }
@@ -105,7 +99,8 @@ public class Travel : MonoBehaviour
 
             Vector3 worldOffset = rightPalmPose.position - neutralFistPosition;
 
-            Vector3 forwardDirection = headsetCamera != null ? headsetCamera.forward : drone.forward;
+            // Use drone forward direction for stable movement.
+            Vector3 forwardDirection = drone.forward;
             forwardDirection.y = 0f;
             forwardDirection.Normalize();
 
@@ -145,7 +140,6 @@ public class Travel : MonoBehaviour
 
     private void HandlePalmRotation(Pose rightPalmPose)
     {
-        // Open palm wrist rotation = drone rotation.
         if (!hasNeutralPalmRotation)
         {
             neutralPalmRotation = rightPalmPose.rotation;
@@ -165,13 +159,12 @@ public class Travel : MonoBehaviour
         if (Mathf.Abs(yawDelta) < turnDeadZone)
             return;
 
-        // Clamp wrist influence.
-        yawDelta = Mathf.Clamp(yawDelta, -20f, 20f);
+        // Fixed slow turning.
+        float turnDirection = Mathf.Sign(yawDelta);
 
-        // Slow smooth rotation.
         drone.Rotate(
             Vector3.up,
-            yawDelta * turnSpeed * Time.deltaTime,
+            turnDirection * turnSpeed * Time.deltaTime,
             Space.World
         );
     }
