@@ -46,6 +46,7 @@ public class RaceCheckpoint : MonoBehaviour
         checkpointSphere.transform.localPosition = Vector3.zero;
         checkpointSphere.transform.localScale = Vector3.one * checkpointSphereDiameter;
         Object.Destroy(checkpointSphere.GetComponent<Collider>());
+        EnsureCheckpointMaterial(checkpointSphere.GetComponent<Renderer>());
 
         var sphereRadius = checkpointSphereDiameter * 0.5f;
         var toPreviousCheckpoint = previousCheckpointPosition - transform.position;
@@ -64,6 +65,7 @@ public class RaceCheckpoint : MonoBehaviour
                 poleObject.transform.localRotation = Quaternion.FromToRotation(Vector3.up, transform.InverseTransformDirection(connectorDirection));
                 poleObject.transform.localScale = new Vector3(PoleRadius, connectorLength * 0.5f, PoleRadius);
                 Object.Destroy(poleObject.GetComponent<Collider>());
+                EnsureCheckpointMaterial(poleObject.GetComponent<Renderer>());
             }
         }
 
@@ -112,6 +114,16 @@ public class RaceCheckpoint : MonoBehaviour
             }
 
             var material = sceneRenderer.material;
+            if (material.HasProperty("_BaseColor"))
+            {
+                material.SetColor("_BaseColor", color);
+            }
+
+            if (material.HasProperty("_Color"))
+            {
+                material.SetColor("_Color", color);
+            }
+
             material.color = color;
 
             if (material.HasProperty("_EmissionColor"))
@@ -120,5 +132,23 @@ public class RaceCheckpoint : MonoBehaviour
                 material.SetColor("_EmissionColor", color * emissionStrength);
             }
         }
+    }
+
+    private static void EnsureCheckpointMaterial(Renderer renderer)
+    {
+        if (renderer == null)
+        {
+            return;
+        }
+
+        var shader = Shader.Find("Universal Render Pipeline/Lit")
+            ?? Shader.Find("Standard");
+
+        if (shader == null)
+        {
+            return;
+        }
+
+        renderer.material = new Material(shader);
     }
 }
