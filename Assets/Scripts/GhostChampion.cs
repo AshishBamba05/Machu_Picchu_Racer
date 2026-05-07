@@ -32,6 +32,9 @@ public class GhostChampion : MonoBehaviour
     [Header("Ghost Visual")]
     public bool hideGhostWhenNotPlaying = true;
 
+    [Header("Debug")]
+    [SerializeField] private bool enableDebugLogs = true;
+
     private GhostRunData currentRun = new GhostRunData();
     private GhostRunData bestRun;
 
@@ -56,6 +59,7 @@ public class GhostChampion : MonoBehaviour
     private void Start()
     {
         EnsureGhostDroneVisual();
+        LogDebug($"Using ghost save path: {SavePath}");
         LoadBestRun();
 
         if (ghostDrone != null && hideGhostWhenNotPlaying)
@@ -75,7 +79,10 @@ public class GhostChampion : MonoBehaviour
     public void StartRecording()
     {
         if (playerDrone == null)
+        {
+            LogDebug("StartRecording skipped because playerDrone is not assigned.");
             return;
+        }
 
         currentRun = new GhostRunData();
 
@@ -83,13 +90,17 @@ public class GhostChampion : MonoBehaviour
         nextSampleTime = 0f;
         isRecording = true;
         RecordFrame(0f);
+        LogDebug($"Started recording run at {samplesPerSecond:0.#} Hz.");
     }
 
     // Call this when the race finishes
     public void StopRecordingAndSaveIfBest(float finalRaceTime)
     {
         if (!isRecording)
+        {
+            LogDebug("StopRecordingAndSaveIfBest skipped because recording was not active.");
             return;
+        }
 
         RecordFrame(finalRaceTime);
         isRecording = false;
@@ -97,6 +108,8 @@ public class GhostChampion : MonoBehaviour
 
         bool noBestYet = bestRun == null || bestRun.frames == null || bestRun.frames.Count == 0;
         bool isNewBest = noBestYet || finalRaceTime < bestRun.totalTime;
+
+        LogDebug($"Finished run: time={finalRaceTime:0.000}s, frames={currentRun.frames.Count}, newBest={isNewBest}.");
 
         if (isNewBest)
         {
@@ -111,10 +124,16 @@ public class GhostChampion : MonoBehaviour
         EnsureGhostDroneVisual();
 
         if (ghostDrone == null)
+        {
+            LogDebug("StartGhostReplay skipped because ghostDrone is not available.");
             return;
+        }
 
         if (bestRun == null || bestRun.frames == null || bestRun.frames.Count < 2)
+        {
+            LogDebug("StartGhostReplay skipped because no saved best run is available yet.");
             return;
+        }
 
         ghostDrone.gameObject.SetActive(true);
 
@@ -123,6 +142,7 @@ public class GhostChampion : MonoBehaviour
 
         replayStartTime = Time.time;
         isReplaying = true;
+        LogDebug($"Started ghost replay with {bestRun.frames.Count} frames and best time {bestRun.totalTime:0.000}s.");
     }
 
     public void StopGhostReplay()
@@ -196,15 +216,22 @@ public class GhostChampion : MonoBehaviour
     {
         string json = JsonUtility.ToJson(bestRun, true);
         File.WriteAllText(SavePath, json);
+        LogDebug($"Saved best run to '{SavePath}' with {bestRun.frames.Count} frames at {bestRun.totalTime:0.000}s.");
     }
 
     private void LoadBestRun()
     {
         if (!File.Exists(SavePath))
+        {
+            LogDebug("No saved ghost run found on disk.");
             return;
+        }
 
         string json = File.ReadAllText(SavePath);
         bestRun = JsonUtility.FromJson<GhostRunData>(json);
+        int frameCount = bestRun?.frames?.Count ?? 0;
+        float totalTime = bestRun?.totalTime ?? 0f;
+        LogDebug($"Loaded best run from '{SavePath}' with {frameCount} frames at {totalTime:0.000}s.");
     }
 
     public bool HasBestRun()
@@ -212,6 +239,11 @@ public class GhostChampion : MonoBehaviour
         return bestRun != null &&
                bestRun.frames != null &&
                bestRun.frames.Count > 1;
+    }
+
+    public string GetSavePath()
+    {
+        return SavePath;
     }
 
     private void RecordFrame(float timestamp)
@@ -275,6 +307,14 @@ public class GhostChampion : MonoBehaviour
 
         if (hideGhostWhenNotPlaying)
             ghostDrone.gameObject.SetActive(false);
+    }
+
+    private void LogDebug(string message)
+    {
+        if (!enableDebugLogs)
+            return;
+
+        Debug.Log($"[GhostChampion] {message}", this);
     }
 
     private void CreateGhostPrimitive(
