@@ -15,7 +15,6 @@ public class RaceCheckpoint : MonoBehaviour
     private const float PoleRadius = 0.35f;
 
     private Renderer[] cachedRenderers = System.Array.Empty<Renderer>();
-    private RaceTrackManager raceManager;
     private int checkpointIndex = -1;
     private CheckpointVisualState currentState = CheckpointVisualState.Pending;
 
@@ -24,19 +23,13 @@ public class RaceCheckpoint : MonoBehaviour
     [SerializeField] private float activeEmissionMax = 2.2f;
     [SerializeField] private float checkpointSphereDiameter = 1.8f;
 
-    public void Initialize(RaceTrackManager raceManager, int index)
+    public void Initialize(int index)
     {
-        this.raceManager = raceManager;
         checkpointIndex = index;
         name = $"Checkpoint {index + 1}";
     }
 
     public int CheckpointIndex => checkpointIndex;
-
-    public bool BelongsTo(RaceTrackManager manager)
-    {
-        return raceManager == manager;
-    }
 
     public void CacheRenderers(Vector3 previousCheckpointPosition)
     {
