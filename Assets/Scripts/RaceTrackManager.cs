@@ -692,7 +692,7 @@ public class RaceTrackManager : MonoBehaviour
         var checkpoint = checkpointRoot.AddComponent<RaceCheckpoint>();
         checkpoint.Initialize(this, index);
 
-        checkpoint.CacheRenderers();
+        checkpoint.CacheRenderers(nextPosition);
         checkpoint.SetState(CheckpointVisualState.Pending);
         return checkpoint;
     }
