@@ -439,7 +439,7 @@ public class Gameplay : MonoBehaviour
         Rigidbody attachedBody = drone.GetComponent<Rigidbody>();
         if (attachedBody != null)
         {
-            attachedBody.linearVelocity = Vector3.zero;
+            attachedBody.velocity = Vector3.zero;
             attachedBody.angularVelocity = Vector3.zero;
         }
     }
