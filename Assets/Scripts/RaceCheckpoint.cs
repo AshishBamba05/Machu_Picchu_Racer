@@ -160,7 +160,7 @@ public class RaceCheckpoint : MonoBehaviour
         var planarDirection = new Vector2(localDirection.x, localDirection.y);
         if (planarDirection.sqrMagnitude < 0.0001f)
         {
-            planarDirection = Vector2.down;
+            planarDirection = localDirection.z >= 0f ? Vector2.down : Vector2.up;
         }
 
         planarDirection.Normalize();
@@ -169,7 +169,7 @@ public class RaceCheckpoint : MonoBehaviour
             HeadArrowBaseHeight + bobOffset + planarDirection.y * 0.12f,
             HeadArrowBaseDistance);
 
-        var angle = Mathf.Atan2(-planarDirection.x, -planarDirection.y) * Mathf.Rad2Deg;
+        var angle = Vector2.SignedAngle(Vector2.down, planarDirection);
         headArrowRoot.localRotation = Quaternion.Euler(0f, 0f, angle);
     }
 
