@@ -20,6 +20,9 @@ public class Gameplay : MonoBehaviour
     [Header("Single UI Text")]
     public TMP_Text gameplayText;
 
+    [Header("Ghost Champion")]
+    [SerializeField] private bool enableGhostChampionMode = true;
+
     [Header("Gameplay Settings")]
     public float startCountdownTime = 3f;
     public float crashPenaltyTime = 3f;
@@ -43,6 +46,7 @@ public class Gameplay : MonoBehaviour
     private string currentMessage = "";
     private TMP_Text countdownText;
     private DroneRaceAudio raceAudio;
+    private GhostChampion ghostChampion;
 
     private void Start()
     {
@@ -51,6 +55,13 @@ public class Gameplay : MonoBehaviour
 
         if (gameplayText == null)
             gameplayText = FindVisibleGameplayText();
+
+        ghostChampion = GetComponent<GhostChampion>();
+        if (ghostChampion == null && enableGhostChampionMode)
+            ghostChampion = gameObject.AddComponent<GhostChampion>();
+
+        if (ghostChampion != null)
+            ghostChampion.playerDrone = drone;
 
         ConfigureGameplayHud();
         EnsureCountdownOverlay();
@@ -145,6 +156,7 @@ public class Gameplay : MonoBehaviour
         lastClearedCheckpointIndex = 0;
         currentCheckpointIndex = 1;
         RefreshCheckpointVisuals();
+        ghostChampion?.ResetRunState();
 
         MoveDroneToCheckpoint(0);
     }
@@ -177,6 +189,12 @@ public class Gameplay : MonoBehaviour
 
         if (travelScript != null)
             travelScript.canMove = true;
+
+        if (enableGhostChampionMode)
+        {
+            ghostChampion?.StartGhostReplay();
+            ghostChampion?.StartRecording();
+        }
     }
 
     private void CheckCheckpointProgress()
@@ -305,11 +323,14 @@ public class Gameplay : MonoBehaviour
 
     private void FinishRace()
     {
+        float finalRaceTime = timer;
         raceFinished = true;
         timerRunning = false;
         RefreshCheckpointVisuals();
         raceAudio?.SetEngineActive(false);
         raceAudio?.PlayFinish();
+        ghostChampion?.StopRecordingAndSaveIfBest(finalRaceTime);
+        ghostChampion?.StopGhostReplay();
 
         if (travelScript != null)
             travelScript.canMove = false;
@@ -391,6 +412,8 @@ public class Gameplay : MonoBehaviour
             checkpointString +
             "\n" +
             distanceString +
+            "\n" +
+            GetGhostStatusLine() +
             "\n" +
             currentMessage;
     }
@@ -531,5 +554,15 @@ public class Gameplay : MonoBehaviour
         return minutes.ToString("00") + ":" +
                seconds.ToString("00") + "." +
                milliseconds.ToString("00");
+    }
+
+    private string GetGhostStatusLine()
+    {
+        if (!enableGhostChampionMode || ghostChampion == null)
+            return "Ghost: Off";
+
+        return ghostChampion.HasBestRun()
+            ? "Ghost: Racing best run"
+            : "Ghost: Recording first best run";
     }
 }
