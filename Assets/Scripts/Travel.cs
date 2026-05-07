@@ -173,7 +173,7 @@ public class Travel : MonoBehaviour
             }
         }
 
-        return curledCount >= 3;
+        return curledCount >= 4;
     }
 
     private void OnTriggerEnter(Collider other)
