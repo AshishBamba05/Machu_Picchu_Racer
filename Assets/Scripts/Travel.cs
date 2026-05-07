@@ -19,7 +19,7 @@ public class Travel : MonoBehaviour
     public float thumbNeutralThreshold = 0.04f;
 
     [Header("Left Thumb Rotation")]
-    public float leftThumbRotationDeadZone = 0.25f;
+    public float leftThumbRotationDeadZone = 0.12f;
     public bool invertLeftThumbRotation = false;
 
     [Header("Gameplay Lock")]
