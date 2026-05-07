@@ -176,8 +176,9 @@ public class RaceTrackManager : MonoBehaviour
         var hudTextObject = new GameObject("HUD Text");
         hudTextObject.transform.SetParent(hudRoot, false);
         hudText = hudTextObject.AddComponent<TextMeshPro>();
+        hudText.font = TMP_Settings.defaultFontAsset;
         hudText.alignment = TextAlignmentOptions.TopLeft;
-        hudText.fontSize = 3.2f;
+        hudText.fontSize = 3.8f;
         hudText.color = Color.white;
         hudText.enableWordWrapping = false;
         hudText.overflowMode = TextOverflowModes.Overflow;
@@ -187,22 +188,22 @@ public class RaceTrackManager : MonoBehaviour
 
     private void EnsureDroneDistanceIndicator()
     {
-        if (droneDistanceText != null || racer == null)
+        if (droneDistanceText != null || racerCamera == null)
         {
             return;
         }
 
         droneDistanceRoot = new GameObject("Drone Distance Indicator").transform;
-        droneDistanceRoot.SetParent(racer, false);
-        droneDistanceRoot.localPosition = new Vector3(0f, 0.55f, 0.95f);
+        droneDistanceRoot.SetParent(racerCamera.transform, false);
+        droneDistanceRoot.localPosition = new Vector3(0f, -0.31f, 0.7f);
         droneDistanceRoot.localRotation = Quaternion.identity;
-        droneDistanceRoot.localScale = Vector3.one * 0.0022f;
+        droneDistanceRoot.localScale = Vector3.one * 0.0018f;
 
         var background = GameObject.CreatePrimitive(PrimitiveType.Cube);
         background.name = "Distance Background";
         background.transform.SetParent(droneDistanceRoot, false);
         background.transform.localPosition = new Vector3(0f, 0f, 0.015f);
-        background.transform.localScale = new Vector3(0.9f, 0.28f, 0.01f);
+        background.transform.localScale = new Vector3(1.3f, 0.32f, 0.01f);
         Destroy(background.GetComponent<Collider>());
 
         var backgroundRenderer = background.GetComponent<MeshRenderer>();
@@ -213,12 +214,13 @@ public class RaceTrackManager : MonoBehaviour
         var textObject = new GameObject("Distance Text");
         textObject.transform.SetParent(droneDistanceRoot, false);
         droneDistanceText = textObject.AddComponent<TextMeshPro>();
+        droneDistanceText.font = TMP_Settings.defaultFontAsset;
         droneDistanceText.alignment = TextAlignmentOptions.Center;
-        droneDistanceText.fontSize = 2.4f;
+        droneDistanceText.fontSize = 2.7f;
         droneDistanceText.color = new Color(0.8f, 0.92f, 1f);
         droneDistanceText.enableWordWrapping = false;
         droneDistanceText.overflowMode = TextOverflowModes.Overflow;
-        droneDistanceText.rectTransform.sizeDelta = new Vector2(760f, 180f);
+        droneDistanceText.rectTransform.sizeDelta = new Vector2(1080f, 220f);
         droneDistanceText.rectTransform.localPosition = Vector3.zero;
     }
 
@@ -848,6 +850,7 @@ public class RaceTrackManager : MonoBehaviour
             $"{distanceLine}\n" +
             $"{countdownLine}\n" +
             $"{statusMessage}";
+        hudText.ForceMeshUpdate();
     }
 
     private void UpdateDroneDistanceIndicator()
@@ -865,7 +868,11 @@ public class RaceTrackManager : MonoBehaviour
 
         droneDistanceRoot.gameObject.SetActive(true);
         var distance = Vector3.Distance(racer.position, checkpointPositions[nextCheckpointIndex]);
-        droneDistanceText.text = $"Next CP: {distance:0.0}m";
+        var checkpointsPassed = checkpoints.Count == 0
+            ? 0
+            : Mathf.Clamp(lastClearedCheckpointIndex + 1, 0, checkpoints.Count);
+        droneDistanceText.text = $"Next checkpoint: {distance:0.0}m   |   Passed: {checkpointsPassed}/{checkpoints.Count}";
+        droneDistanceText.ForceMeshUpdate();
     }
 
     private void FinishRace()
