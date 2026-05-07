@@ -301,7 +301,6 @@ public class GhostChampion : MonoBehaviour
             return;
 
         GameObject ghostRoot = new GameObject("Ghost Champion Drone");
-        ghostRoot.transform.SetParent(transform, false);
         ghostDrone = ghostRoot.transform;
 
         CreateGhostPrimitive(
