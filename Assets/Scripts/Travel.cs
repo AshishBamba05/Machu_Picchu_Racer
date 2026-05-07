@@ -21,8 +21,8 @@ public class Travel : MonoBehaviour
     public float thumbHeightThreshold = 0.08f;
 
     [Header("Rotation")]
-    public float turnSpeed = 45f;
-    public float turnDeadZone = 0.03f;
+    public float turnSpeed = 2.5f;
+    public float turnDeadZone = 8f;
 
     [Header("Gesture Detection")]
     public float fistThreshold = 0.09f;
@@ -37,8 +37,8 @@ public class Travel : MonoBehaviour
     private bool hasNeutralFistPosition = false;
     private Vector3 neutralFistPosition;
 
-    private bool hasNeutralWristRotation = false;
-    private Quaternion neutralWristRotation;
+    private bool hasNeutralPalmRotation = false;
+    private Quaternion neutralPalmRotation;
 
     void Start()
     {
@@ -74,12 +74,22 @@ public class Travel : MonoBehaviour
             return;
 
         bool rightFist = IsFist(rightHand, rightPalmPose.position);
+
         bool rightThumbUp = IsThumbUp(rightHand, rightPalmPose.position);
         bool rightThumbDown = IsThumbDown(rightHand, rightPalmPose.position);
 
         HandleForwardBackwardMovement(rightPalmPose, rightFist);
         HandleVerticalMovement(rightThumbUp, rightThumbDown);
-        HandleWristRotation(rightPalmPose, rightFist);
+
+        // Open palm = rotation mode.
+        if (!rightFist)
+        {
+            HandlePalmRotation(rightPalmPose);
+        }
+        else
+        {
+            hasNeutralPalmRotation = false;
+        }
     }
 
     private void HandleForwardBackwardMovement(Pose rightPalmPose, bool rightFist)
@@ -105,7 +115,12 @@ public class Travel : MonoBehaviour
             if (Mathf.Abs(forwardAmount) > movementDeadZone)
             {
                 float speed = forwardAmount > 0f ? forwardSpeed : backwardSpeed;
-                drone.position += forwardDirection * Mathf.Sign(forwardAmount) * speed * Time.deltaTime;
+
+                drone.position +=
+                    forwardDirection *
+                    Mathf.Sign(forwardAmount) *
+                    speed *
+                    Time.deltaTime;
             }
         }
         else
@@ -128,39 +143,43 @@ public class Travel : MonoBehaviour
         }
     }
 
-    private void HandleWristRotation(Pose rightPalmPose, bool rightFist)
+    private void HandlePalmRotation(Pose rightPalmPose)
     {
-        // Right fist wrist rotation = rotate drone.
-        if (rightFist)
+        // Open palm wrist rotation = drone rotation.
+        if (!hasNeutralPalmRotation)
         {
-            if (!hasNeutralWristRotation)
-            {
-                neutralWristRotation = rightPalmPose.rotation;
-                hasNeutralWristRotation = true;
-            }
-
-            Quaternion deltaRotation = rightPalmPose.rotation * Quaternion.Inverse(neutralWristRotation);
-
-            float yawDelta = deltaRotation.eulerAngles.y;
-
-            if (yawDelta > 180f)
-                yawDelta -= 360f;
-
-            if (Mathf.Abs(yawDelta) > turnDeadZone)
-            {
-                drone.Rotate(Vector3.up, yawDelta * turnSpeed * Time.deltaTime, Space.World);
-            }
+            neutralPalmRotation = rightPalmPose.rotation;
+            hasNeutralPalmRotation = true;
         }
-        else
-        {
-            hasNeutralWristRotation = false;
-        }
+
+        Quaternion deltaRotation =
+            rightPalmPose.rotation *
+            Quaternion.Inverse(neutralPalmRotation);
+
+        float yawDelta = deltaRotation.eulerAngles.y;
+
+        if (yawDelta > 180f)
+            yawDelta -= 360f;
+
+        // Ignore tiny wrist movement.
+        if (Mathf.Abs(yawDelta) < turnDeadZone)
+            return;
+
+        // Clamp wrist influence.
+        yawDelta = Mathf.Clamp(yawDelta, -20f, 20f);
+
+        // Slow smooth rotation.
+        drone.Rotate(
+            Vector3.up,
+            yawDelta * turnSpeed * Time.deltaTime,
+            Space.World
+        );
     }
 
     private void ResetGestureState()
     {
         hasNeutralFistPosition = false;
-        hasNeutralWristRotation = false;
+        hasNeutralPalmRotation = false;
     }
 
     private void OnTriggerEnter(Collider other)
@@ -175,7 +194,8 @@ public class Travel : MonoBehaviour
         if (manager?.activeLoader == null)
             return;
 
-        handSubsystem = manager.activeLoader.GetLoadedSubsystem<XRHandSubsystem>();
+        handSubsystem =
+            manager.activeLoader.GetLoadedSubsystem<XRHandSubsystem>();
     }
 
     private bool TryGetPalmPose(XRHand hand, out Pose pose)
@@ -203,7 +223,9 @@ public class Travel : MonoBehaviour
 
             if (joint.TryGetPose(out Pose tipPose))
             {
-                totalDistance += Vector3.Distance(tipPose.position, palmPosition);
+                totalDistance +=
+                    Vector3.Distance(tipPose.position, palmPosition);
+
                 count++;
             }
         }
@@ -212,6 +234,7 @@ public class Travel : MonoBehaviour
             return false;
 
         float averageDistance = totalDistance / count;
+
         return averageDistance < fistThreshold;
     }
 
@@ -222,7 +245,9 @@ public class Travel : MonoBehaviour
         if (!thumbTip.TryGetPose(out Pose thumbPose))
             return false;
 
-        return thumbPose.position.y - palmPosition.y > thumbHeightThreshold;
+        return
+            thumbPose.position.y - palmPosition.y >
+            thumbHeightThreshold;
     }
 
     private bool IsThumbDown(XRHand hand, Vector3 palmPosition)
@@ -232,6 +257,8 @@ public class Travel : MonoBehaviour
         if (!thumbTip.TryGetPose(out Pose thumbPose))
             return false;
 
-        return palmPosition.y - thumbPose.position.y > thumbHeightThreshold;
+        return
+            palmPosition.y - thumbPose.position.y >
+            thumbHeightThreshold;
     }
 }
