@@ -190,7 +190,7 @@ public class Gameplay : MonoBehaviour
 
     private void HandleDroneTriggerEntered(Collider other)
     {
-        if (other == null || raceFinished || isInCrashPenalty)
+        if (other == null || raceFinished || isInCrashPenalty || !raceReady || !timerRunning)
             return;
 
         // Ignore checkpoints
@@ -206,7 +206,7 @@ public class Gameplay : MonoBehaviour
 
     private void OnCollisionEnter(Collision collision)
     {
-        if (collision == null || raceFinished || isInCrashPenalty)
+        if (collision == null || raceFinished || isInCrashPenalty || !raceReady || !timerRunning)
             return;
 
         if (collision.transform.root == drone.root)
@@ -217,7 +217,7 @@ public class Gameplay : MonoBehaviour
 
     public void OnCrash()
     {
-        if (raceFinished || isInCrashPenalty)
+        if (raceFinished || isInCrashPenalty || !raceReady || !timerRunning)
             return;
 
         StartCoroutine(CrashPenalty());
