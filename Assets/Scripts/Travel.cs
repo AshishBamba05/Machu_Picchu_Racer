@@ -8,14 +8,15 @@ public class Travel : MonoBehaviour
     [Header("Drone")]
     public Transform drone;
 
-    [Header("Index Finger Movement")]
-    public float moveSpeed = 35f;
-    public float rotationSpeed = 45f;
-    public float rotationAngleDeadZone = 12f;
-    public float directionSmoothSpeed = 8f;
+    [Header("Palm Control")]
+    public float moveSpeed = 5f;
+    public float rotationSpeed = 30f;
+    public float forwardDeadZone = 0.25f;
+    public float rotationDeadZone = 0.25f;
+    public float smoothingSpeed = 6f;
 
-    [Header("Up / Down Movement")]
-    public float verticalSpeed = 25f;
+    [Header("Thumb Up / Down")]
+    public float verticalSpeed = 4f;
     public float thumbHeightThreshold = 0.08f;
 
     [Header("Gesture Detection")]
@@ -27,8 +28,9 @@ public class Travel : MonoBehaviour
     public event Action<Collider> TriggerEntered;
 
     private XRHandSubsystem handSubsystem;
-    private Vector3 smoothedPointDirection;
-    private bool hasSmoothedDirection = false;
+
+    private Vector3 smoothedPalmForward;
+    private bool hasSmoothedPalmForward = false;
 
     void Start()
     {
@@ -51,85 +53,101 @@ public class Travel : MonoBehaviour
 
         XRHand rightHand = handSubsystem.rightHand;
 
+        // If hand is not tracked, stop movement
         if (!rightHand.isTracked)
         {
-            hasSmoothedDirection = false;
+            hasSmoothedPalmForward = false;
             return;
         }
 
         if (!TryGetPalmPose(rightHand, out Pose rightPalmPose))
+        {
+            hasSmoothedPalmForward = false;
             return;
+        }
 
+        // Fist = stop movement
         bool rightFist = IsFist(rightHand, rightPalmPose.position);
 
         if (rightFist)
         {
-            hasSmoothedDirection = false;
+            hasSmoothedPalmForward = false;
             return;
         }
 
         bool rightThumbUp = IsThumbUp(rightHand, rightPalmPose.position);
         bool rightThumbDown = IsThumbDown(rightHand, rightPalmPose.position);
 
-        HandleIndexFingerMovement(rightHand);
-        HandleVerticalMovement(rightThumbUp, rightThumbDown);
+        HandlePalmForwardAndRotation(rightPalmPose);
+        HandleThumbVerticalMovement(rightThumbUp, rightThumbDown);
     }
 
-    private void HandleIndexFingerMovement(XRHand rightHand)
+    private void HandlePalmForwardAndRotation(Pose palmPose)
     {
-        if (!TryGetIndexPointDirection(rightHand, out Vector3 rawDirection))
-            return;
+        Vector3 rawPalmForward = palmPose.rotation * Vector3.forward;
 
-        rawDirection.y = 0f;
+        // If forward feels reversed, change the line above to:
+        // Vector3 rawPalmForward = palmPose.rotation * -Vector3.forward;
 
-        if (rawDirection.sqrMagnitude < 0.001f)
-            return;
-
-        rawDirection.Normalize();
-
-        if (!hasSmoothedDirection)
+        if (!hasSmoothedPalmForward)
         {
-            smoothedPointDirection = rawDirection;
-            hasSmoothedDirection = true;
+            smoothedPalmForward = rawPalmForward;
+            hasSmoothedPalmForward = true;
         }
         else
         {
-            smoothedPointDirection = Vector3.Slerp(
-                smoothedPointDirection,
-                rawDirection,
-                directionSmoothSpeed * Time.deltaTime
+            smoothedPalmForward = Vector3.Slerp(
+                smoothedPalmForward,
+                rawPalmForward,
+                smoothingSpeed * Time.deltaTime
             );
         }
 
-        smoothedPointDirection.y = 0f;
-        smoothedPointDirection.Normalize();
+        smoothedPalmForward.Normalize();
 
-        float angleToTarget = Vector3.SignedAngle(
-            drone.forward,
-            smoothedPointDirection,
-            Vector3.up
+        // =========================
+        // FORWARD ONLY
+        // =========================
+
+        float forwardAmount = Vector3.Dot(
+            smoothedPalmForward,
+            drone.forward
         );
 
-        if (Mathf.Abs(angleToTarget) > rotationAngleDeadZone)
+        // Only move if palm points forward.
+        // If forwardAmount is negative, we ignore it.
+        if (forwardAmount > forwardDeadZone)
         {
-            Quaternion targetRotation =
-                Quaternion.LookRotation(smoothedPointDirection, Vector3.up);
-
-            drone.rotation = Quaternion.RotateTowards(
-                drone.rotation,
-                targetRotation,
-                rotationSpeed * Time.deltaTime
-            );
+            drone.position +=
+                drone.forward *
+                forwardAmount *
+                moveSpeed *
+                Time.deltaTime;
         }
 
-        Vector3 moveDirection = drone.forward;
-        moveDirection.y = 0f;
-        moveDirection.Normalize();
+        // =========================
+        // LEFT / RIGHT ROTATION
+        // =========================
 
-        drone.position += moveDirection * moveSpeed * Time.deltaTime;
+        float turnAmount = Vector3.Dot(
+            smoothedPalmForward,
+            drone.right
+        );
+
+        if (Mathf.Abs(turnAmount) > rotationDeadZone)
+        {
+            drone.Rotate(
+                Vector3.up,
+                turnAmount * rotationSpeed * Time.deltaTime,
+                Space.World
+            );
+        }
     }
 
-    private void HandleVerticalMovement(bool rightThumbUp, bool rightThumbDown)
+    private void HandleThumbVerticalMovement(
+        bool rightThumbUp,
+        bool rightThumbDown
+    )
     {
         if (rightThumbUp)
         {
@@ -163,34 +181,6 @@ public class Travel : MonoBehaviour
         return palm.TryGetPose(out pose);
     }
 
-    private bool TryGetIndexPointDirection(XRHand hand, out Vector3 direction)
-    {
-        direction = Vector3.zero;
-
-        XRHandJoint indexTip = hand.GetJoint(XRHandJointID.IndexTip);
-        XRHandJoint indexMiddle = hand.GetJoint(XRHandJointID.IndexIntermediate);
-        XRHandJoint indexBase = hand.GetJoint(XRHandJointID.IndexProximal);
-
-        bool hasTip = indexTip.TryGetPose(out Pose tipPose);
-        bool hasMiddle = indexMiddle.TryGetPose(out Pose middlePose);
-        bool hasBase = indexBase.TryGetPose(out Pose basePose);
-
-        if (hasTip && hasBase)
-        {
-            direction = tipPose.position - basePose.position;
-        }
-        else if (hasTip && hasMiddle)
-        {
-            direction = tipPose.position - middlePose.position;
-        }
-        else
-        {
-            return false;
-        }
-
-        return direction.sqrMagnitude > 0.0001f;
-    }
-
     private bool IsFist(XRHand hand, Vector3 palmPosition)
     {
         float totalDistance = 0f;
@@ -210,7 +200,11 @@ public class Travel : MonoBehaviour
 
             if (joint.TryGetPose(out Pose tipPose))
             {
-                totalDistance += Vector3.Distance(tipPose.position, palmPosition);
+                totalDistance += Vector3.Distance(
+                    tipPose.position,
+                    palmPosition
+                );
+
                 count++;
             }
         }
