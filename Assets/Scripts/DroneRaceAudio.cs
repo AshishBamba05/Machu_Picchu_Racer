@@ -50,12 +50,12 @@ public class DroneRaceAudio : MonoBehaviour
         var pitch = Mathf.Clamp01((secondsRemaining - 1) / 3f);
         var clip = CreateToneClip(
             $"Countdown Tick {secondsRemaining}",
-            0.18f,
-            Mathf.Lerp(540f, 760f, 1f - pitch),
-            0.14f,
-            waveSharpness: 0.2f,
-            vibratoAmount: 0.01f,
-            vibratoFrequency: 10f);
+            0.22f,
+            Mathf.Lerp(280f, 380f, 1f - pitch),
+            0.17f,
+            waveSharpness: 0.06f,
+            vibratoAmount: 0.002f,
+            vibratoFrequency: 6f);
         sfxSource.PlayOneShot(clip, 0.9f);
     }
 
