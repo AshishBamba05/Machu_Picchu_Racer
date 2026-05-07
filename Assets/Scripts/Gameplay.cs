@@ -340,7 +340,7 @@ public class Gameplay : MonoBehaviour
         if (travelScript != null)
             travelScript.canMove = false;
 
-        currentMessage = "Finished!";
+        currentMessage = GetGhostFinishMessage();
     }
 
     private void RefreshCheckpointVisuals()
@@ -418,7 +418,7 @@ public class Gameplay : MonoBehaviour
             "\n" +
             distanceString +
             "\n" +
-            GetGhostStatusLine() +
+            GetGhostDisplayLine() +
             "\n" +
             currentMessage;
     }
@@ -561,14 +561,24 @@ public class Gameplay : MonoBehaviour
                milliseconds.ToString("00");
     }
 
-    private string GetGhostStatusLine()
+    private string GetGhostDisplayLine()
     {
         if (!enableGhostChampionMode || ghostChampion == null)
-            return "Ghost: Off";
+            return "Recording first best run";
 
-        return ghostChampion.HasBestRun()
-            ? "Ghost: Racing best run"
-            : "Ghost: Recording first best run";
+        return ghostChampion.TryGetBestRunTime(out float bestTime)
+            ? "Best ghost: " + FormatTime(bestTime)
+            : "Recording first best run";
+    }
+
+    private string GetGhostFinishMessage()
+    {
+        if (!enableGhostChampionMode || ghostChampion == null)
+            return "Finished!";
+
+        return ghostChampion.WasLastRunNewBest()
+            ? "Congrats new record"
+            : "Fail to beat best record";
     }
 
     private void LogGhostDebug(string message)

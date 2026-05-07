@@ -40,6 +40,7 @@ public class GhostChampion : MonoBehaviour
 
     private bool isRecording = false;
     private bool isReplaying = false;
+    private bool lastRunWasNewBest = false;
 
     private float recordingStartTime;
     private float replayStartTime;
@@ -108,6 +109,7 @@ public class GhostChampion : MonoBehaviour
 
         bool noBestYet = bestRun == null || bestRun.frames == null || bestRun.frames.Count == 0;
         bool isNewBest = noBestYet || finalRaceTime < bestRun.totalTime;
+        lastRunWasNewBest = isNewBest;
 
         LogDebug($"Finished run: time={finalRaceTime:0.000}s, frames={currentRun.frames.Count}, newBest={isNewBest}.");
 
@@ -158,6 +160,7 @@ public class GhostChampion : MonoBehaviour
         isRecording = false;
         isReplaying = false;
         currentRun = new GhostRunData();
+        lastRunWasNewBest = false;
 
         if (ghostDrone != null && hideGhostWhenNotPlaying)
             ghostDrone.gameObject.SetActive(false);
@@ -244,6 +247,23 @@ public class GhostChampion : MonoBehaviour
     public string GetSavePath()
     {
         return SavePath;
+    }
+
+    public bool TryGetBestRunTime(out float bestTime)
+    {
+        if (!HasBestRun())
+        {
+            bestTime = 0f;
+            return false;
+        }
+
+        bestTime = bestRun.totalTime;
+        return true;
+    }
+
+    public bool WasLastRunNewBest()
+    {
+        return lastRunWasNewBest;
     }
 
     private void RecordFrame(float timestamp)
