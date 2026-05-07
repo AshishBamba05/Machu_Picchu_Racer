@@ -73,7 +73,7 @@ public class RaceTrackManager : MonoBehaviour
             return;
         }
 
-        if (Input.GetKeyDown(KeyCode.R))
+        if (IsRestartShortcutPressed())
         {
             ResetRace(true, false);
         }
@@ -91,6 +91,15 @@ public class RaceTrackManager : MonoBehaviour
     public bool IsCheckpoint(Collider other)
     {
         return other.GetComponent<RaceCheckpoint>() != null;
+    }
+
+    private static bool IsRestartShortcutPressed()
+    {
+#if ENABLE_LEGACY_INPUT_MANAGER
+        return Input.GetKeyDown(KeyCode.R);
+#else
+        return false;
+#endif
     }
 
     private void TryInitialize()

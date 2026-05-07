@@ -22,6 +22,7 @@ public class Gameplay : MonoBehaviour
 
     [Header("Ghost Champion")]
     [SerializeField] private bool enableGhostChampionMode = true;
+    [SerializeField] private bool enableGhostDebugLogs = true;
 
     [Header("Gameplay Settings")]
     public float startCountdownTime = 3f;
@@ -62,6 +63,8 @@ public class Gameplay : MonoBehaviour
 
         if (ghostChampion != null)
             ghostChampion.playerDrone = drone;
+
+        LogGhostDebug($"Ghost champion present={ghostChampion != null}, enabled={enableGhostChampionMode}.");
 
         ConfigureGameplayHud();
         EnsureCountdownOverlay();
@@ -192,6 +195,7 @@ public class Gameplay : MonoBehaviour
 
         if (enableGhostChampionMode)
         {
+            LogGhostDebug("Countdown finished. Starting ghost replay and recording.");
             ghostChampion?.StartGhostReplay();
             ghostChampion?.StartRecording();
         }
@@ -324,6 +328,7 @@ public class Gameplay : MonoBehaviour
     private void FinishRace()
     {
         float finalRaceTime = timer;
+        LogGhostDebug($"FinishRace reached with time={finalRaceTime:0.000}s.");
         raceFinished = true;
         timerRunning = false;
         RefreshCheckpointVisuals();
@@ -564,5 +569,13 @@ public class Gameplay : MonoBehaviour
         return ghostChampion.HasBestRun()
             ? "Ghost: Racing best run"
             : "Ghost: Recording first best run";
+    }
+
+    private void LogGhostDebug(string message)
+    {
+        if (!enableGhostDebugLogs)
+            return;
+
+        Debug.Log($"[Gameplay Ghost] {message}", this);
     }
 }
