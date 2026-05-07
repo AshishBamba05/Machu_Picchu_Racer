@@ -1,7 +1,5 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using UnityEngine;
 using TMPro;
 using UnityEngine.UI;
@@ -10,12 +8,6 @@ public class Gameplay : MonoBehaviour
 {
     private const string VisibleGameplayTextName = "Text (TMP)";
     private const string CountdownOverlayName = "Countdown Overlay Canvas";
-    private const float RespawnHeightOffset = 0f;
-    private const int ExternalTrackSearchDepth = 5;
-    private const float CheckpointSurfaceOffset = 0.15f;
-    private const float SurfaceProbePadding = 120f;
-    private const float ImportedTrackCoordinateScale = 0.0254f;
-    private const string DefaultTrackAnchorName = "machu_picchu_2";
 
     [Header("References")]
     public Travel travelScript;
@@ -35,17 +27,8 @@ public class Gameplay : MonoBehaviour
     // 30 feet = 9.144 meters
     public float checkpointReachRadius = 9.144f;
 
-    [Header("Track Loading")]
-    [SerializeField] private string preferredTrackFileName = "competition.xyz";
-    [SerializeField] private string fallbackTrackFileName = "sample_track.xyz";
-    [SerializeField] private bool allowProceduralFallback = false;
-    [SerializeField] private bool interpretTrackCoordinatesAsModelLocal = true;
-    [SerializeField] private bool snapCheckpointHeightToSurface = false;
-    [SerializeField] private string trackAnchorObjectName = DefaultTrackAnchorName;
-
     private readonly List<Transform> checkpoints = new List<Transform>();
     private readonly List<RaceCheckpoint> checkpointComponents = new List<RaceCheckpoint>();
-    private readonly List<Vector3> checkpointPositions = new List<Vector3>();
 
     private int currentCheckpointIndex = 1;
     private int lastClearedCheckpointIndex = 0;
@@ -60,9 +43,6 @@ public class Gameplay : MonoBehaviour
     private string currentMessage = "";
     private TMP_Text countdownText;
     private DroneRaceAudio raceAudio;
-    private Bounds courseBounds;
-    private bool hasCourseBounds;
-    private bool loadedPreferredTrack;
 
     private void Start()
     {
@@ -74,8 +54,22 @@ public class Gameplay : MonoBehaviour
 
         ConfigureGameplayHud();
         EnsureCountdownOverlay();
-        PrepareGameplayRuntime();
-        EnsureCheckpointsLoaded();
+
+        if (travelScript == null)
+            travelScript = drone.GetComponent<Travel>();
+
+        raceAudio = drone.GetComponent<DroneRaceAudio>();
+        if (raceAudio == null)
+            raceAudio = drone.gameObject.AddComponent<DroneRaceAudio>();
+
+        raceAudio.Initialize(drone);
+        raceAudio.SetEngineActive(false);
+
+        if (travelScript != null)
+        {
+            travelScript.canMove = false;
+            travelScript.TriggerEntered += HandleDroneTriggerEntered;
+        }
 
         if (hideDroneVisual && droneVisualRoot != null)
             droneVisualRoot.SetActive(false);
@@ -85,14 +79,6 @@ public class Gameplay : MonoBehaviour
 
     private void Update()
     {
-        if (Input.GetKeyDown(KeyCode.R) && checkpointComponents.Count >= 2)
-        {
-            StopAllCoroutines();
-            SetupDroneAtStart();
-            StartCoroutine(RestartRaceAfterReset());
-            return;
-        }
-
         if (timerRunning && !raceFinished)
         {
             timer += Time.deltaTime;
@@ -110,11 +96,11 @@ public class Gameplay : MonoBehaviour
     {
         currentMessage = "Loading checkpoints...";
 
-        while (checkpointComponents.Count < 2)
+        while (checkpoints.Count < 2)
         {
-            EnsureCheckpointsLoaded();
+            FindGeneratedCheckpoints();
 
-            if (checkpointComponents.Count >= 2)
+            if (checkpoints.Count >= 2)
                 break;
 
             yield return null;
@@ -129,131 +115,10 @@ public class Gameplay : MonoBehaviour
         raceReady = true;
     }
 
-    private void PrepareGameplayRuntime()
-    {
-        if (drone == null)
-            return;
-
-        DisableConflictingLocomotion();
-        EnsureDroneCollisionSetup();
-        EnsureEnvironmentCollisionSetup();
-
-        if (travelScript == null)
-            travelScript = drone.GetComponent<Travel>();
-
-        if (travelScript == null)
-            travelScript = drone.gameObject.AddComponent<Travel>();
-
-        travelScript.drone = drone;
-        travelScript.canMove = false;
-        travelScript.TriggerEntered -= HandleDroneTriggerEntered;
-        travelScript.TriggerEntered += HandleDroneTriggerEntered;
-
-        raceAudio = drone.GetComponent<DroneRaceAudio>();
-        if (raceAudio == null)
-            raceAudio = drone.gameObject.AddComponent<DroneRaceAudio>();
-
-        raceAudio.Initialize(drone);
-        raceAudio.SetEngineActive(false);
-    }
-
-    private void DisableConflictingLocomotion()
-    {
-        var locomotionTypes = new HashSet<string>(StringComparer.Ordinal)
-        {
-            "ActionBasedControllerManager",
-            "ContinuousMoveProvider",
-            "ContinuousMoveProviderBase",
-            "ContinuousTurnProvider",
-            "ContinuousTurnProviderBase",
-            "DynamicMoveProvider",
-            "SnapTurnProvider",
-            "SnapTurnProviderBase",
-            "GrabMoveProvider",
-            "TwoHandedGrabMoveProvider",
-            "ClimbProvider",
-            "TeleportationProvider",
-            "CharacterControllerDriver",
-            "TunnelingVignetteController",
-            "JumpProvider"
-        };
-
-        foreach (MonoBehaviour behaviour in drone.GetComponentsInChildren<MonoBehaviour>(true))
-        {
-            if (behaviour != null && locomotionTypes.Contains(behaviour.GetType().Name))
-                behaviour.enabled = false;
-        }
-    }
-
-    private void EnsureDroneCollisionSetup()
-    {
-        SphereCollider sphereCollider = drone.GetComponent<SphereCollider>();
-        if (sphereCollider == null)
-            sphereCollider = drone.gameObject.AddComponent<SphereCollider>();
-
-        sphereCollider.radius = 0.35f;
-        sphereCollider.center = Vector3.zero;
-        sphereCollider.isTrigger = true;
-
-        Rigidbody rigidbody = drone.GetComponent<Rigidbody>();
-        if (rigidbody == null)
-            rigidbody = drone.gameObject.AddComponent<Rigidbody>();
-
-        rigidbody.useGravity = false;
-        rigidbody.isKinematic = true;
-        rigidbody.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
-    }
-
-    private void EnsureEnvironmentCollisionSetup()
-    {
-        foreach (MeshFilter meshFilter in FindObjectsOfType<MeshFilter>(true))
-        {
-            if (meshFilter == null || meshFilter.sharedMesh == null)
-                continue;
-
-            GameObject sceneObject = meshFilter.gameObject;
-            if (sceneObject == null || sceneObject.transform.IsChildOf(drone) || sceneObject.transform.IsChildOf(transform))
-                continue;
-
-            MeshCollider meshCollider = sceneObject.GetComponent<MeshCollider>();
-            if (meshCollider != null)
-            {
-                if (meshCollider.sharedMesh == meshFilter.sharedMesh)
-                    continue;
-
-                meshCollider.sharedMesh = meshFilter.sharedMesh;
-                meshCollider.convex = false;
-                meshCollider.isTrigger = false;
-                continue;
-            }
-
-            if (sceneObject.GetComponent<Collider>() != null)
-                continue;
-
-            meshCollider = sceneObject.AddComponent<MeshCollider>();
-            meshCollider.sharedMesh = meshFilter.sharedMesh;
-            meshCollider.convex = false;
-            meshCollider.isTrigger = false;
-        }
-    }
-
-    private void EnsureCheckpointsLoaded()
-    {
-        if (checkpointComponents.Count >= 2)
-            return;
-
-        FindGeneratedCheckpoints();
-        if (checkpointComponents.Count >= 2)
-            return;
-
-        LoadOrBuildTrack();
-    }
-
     private void FindGeneratedCheckpoints()
     {
         checkpoints.Clear();
         checkpointComponents.Clear();
-        checkpointPositions.Clear();
 
         RaceCheckpoint[] foundCheckpoints = FindObjectsOfType<RaceCheckpoint>();
 
@@ -266,7 +131,6 @@ public class Gameplay : MonoBehaviour
             {
                 checkpoints.Add(checkpoint.transform);
                 checkpointComponents.Add(checkpoint);
-                checkpointPositions.Add(checkpoint.transform.position);
             }
         }
     }
@@ -313,13 +177,6 @@ public class Gameplay : MonoBehaviour
 
         if (travelScript != null)
             travelScript.canMove = true;
-    }
-
-    private IEnumerator RestartRaceAfterReset()
-    {
-        raceReady = false;
-        yield return StartCoroutine(StartCountdown());
-        raceReady = true;
     }
 
     private void CheckCheckpointProgress()
@@ -424,24 +281,26 @@ public class Gameplay : MonoBehaviour
         if (checkpointIndex < 0 || checkpointIndex >= checkpoints.Count)
             return;
 
-        Vector3 checkpointPosition = checkpointPositions[checkpointIndex] + Vector3.up * RespawnHeightOffset;
-        drone.position = checkpointPosition;
+        Transform checkpoint = checkpoints[checkpointIndex];
+
+        if (checkpoint == null)
+            return;
+
+        drone.position = checkpoint.position;
 
         int nextIndex = Mathf.Min(checkpointIndex + 1, checkpoints.Count - 1);
-        Vector3 flatDirection = checkpointPositions[nextIndex] - checkpointPositions[checkpointIndex];
+        Transform nextCheckpoint = checkpoints[nextIndex];
+
+        if (nextCheckpoint == null)
+            return;
+
+        Vector3 flatDirection = nextCheckpoint.position - checkpoint.position;
         flatDirection.y = 0f;
 
         if (flatDirection.sqrMagnitude > 0.0001f)
             drone.rotation = Quaternion.LookRotation(flatDirection.normalized, Vector3.up);
         else
             drone.rotation = Quaternion.identity;
-
-        Rigidbody attachedBody = drone.GetComponent<Rigidbody>();
-        if (attachedBody != null)
-        {
-            attachedBody.velocity = Vector3.zero;
-            attachedBody.angularVelocity = Vector3.zero;
-        }
     }
 
     private void FinishRace()
@@ -482,355 +341,6 @@ public class Gameplay : MonoBehaviour
 
             checkpoint.SetState(state);
         }
-    }
-
-    private void LoadOrBuildTrack()
-    {
-        ClearTrackObjects();
-        loadedPreferredTrack = false;
-
-        if (TryLoadTrackFromFile(out List<Vector3> points))
-        {
-            checkpointPositions.AddRange(points);
-            currentMessage = loadedPreferredTrack
-                ? "Competition track loaded."
-                : "Fallback track loaded.";
-        }
-        else if (allowProceduralFallback)
-        {
-            checkpointPositions.AddRange(BuildProceduralTrack());
-            currentMessage = "Competition track missing. Using procedural fallback.";
-        }
-        else
-        {
-            currentMessage = "Missing required track file.";
-            return;
-        }
-
-        ConvertTrackCoordinatesToWorldSpace();
-        AlignCheckpointHeightsToSurface();
-        BuildTrackVisuals();
-    }
-
-    private bool TryLoadTrackFromFile(out List<Vector3> points)
-    {
-        List<string> candidates = new List<string>(EnumerateTrackCandidates());
-
-        foreach (string filePath in candidates)
-        {
-            if (!Path.GetFileName(filePath).Equals(preferredTrackFileName, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            if (TryLoadTrackFile(filePath, out points))
-            {
-                loadedPreferredTrack = true;
-                return true;
-            }
-        }
-
-        foreach (string filePath in candidates)
-        {
-            if (!Path.GetFileName(filePath).Equals(fallbackTrackFileName, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            if (TryLoadTrackFile(filePath, out points))
-                return true;
-        }
-
-        foreach (string filePath in candidates)
-        {
-            string fileName = Path.GetFileName(filePath);
-            if (fileName.Equals(preferredTrackFileName, StringComparison.OrdinalIgnoreCase) ||
-                fileName.Equals(fallbackTrackFileName, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            if (TryLoadTrackFile(filePath, out points))
-                return true;
-        }
-
-        points = null;
-        return false;
-    }
-
-    private static bool TryLoadTrackFile(string filePath, out List<Vector3> points)
-    {
-        points = null;
-
-        if (!File.Exists(filePath))
-            return false;
-
-        try
-        {
-            points = Parse.LoadTrack(filePath, 100);
-            return points.Count >= 2;
-        }
-        catch (Exception exception)
-        {
-            Debug.LogWarning($"Unable to load track file '{filePath}': {exception.Message}");
-            return false;
-        }
-    }
-
-    private IEnumerable<string> EnumerateTrackCandidates()
-    {
-        List<string> candidates = new List<string>();
-        HashSet<string> searchedDirectories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        HashSet<string> addedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        void AddFile(string path)
-        {
-            if (string.IsNullOrWhiteSpace(path))
-                return;
-
-            try
-            {
-                string normalizedPath = Path.GetFullPath(path);
-                if (addedFiles.Add(normalizedPath))
-                    candidates.Add(normalizedPath);
-            }
-            catch (Exception)
-            {
-            }
-        }
-
-        void AddDirectory(string directory, int recursiveDepth = 0)
-        {
-            if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory) || !searchedDirectories.Add(directory))
-                return;
-
-            AddFile(Path.Combine(directory, preferredTrackFileName));
-            AddFile(Path.Combine(directory, fallbackTrackFileName));
-
-            foreach (string filePath in Directory.GetFiles(directory, "*.xyz"))
-                AddFile(filePath);
-
-            if (recursiveDepth <= 0)
-                return;
-
-            foreach (string subdirectory in Directory.GetDirectories(directory))
-                AddDirectory(subdirectory, recursiveDepth - 1);
-        }
-
-        void AddDriveRoot(string directory)
-        {
-            AddDirectory(directory, ExternalTrackSearchDepth);
-        }
-
-        void AddExternalMediaCandidates()
-        {
-#if UNITY_STANDALONE_WIN || UNITY_EDITOR_WIN
-            try
-            {
-                foreach (DriveInfo drive in DriveInfo.GetDrives())
-                {
-                    if (drive.IsReady && drive.DriveType == DriveType.Removable)
-                        AddDriveRoot(drive.RootDirectory.FullName);
-                }
-            }
-            catch (Exception exception)
-            {
-                Debug.LogWarning($"Unable to inspect external drives: {exception.Message}");
-            }
-#elif UNITY_STANDALONE_OSX || UNITY_EDITOR_OSX
-            AddDriveRoot("/Volumes");
-#elif UNITY_STANDALONE_LINUX || UNITY_EDITOR_LINUX
-            AddDriveRoot("/media");
-            AddDriveRoot("/mnt");
-            AddDriveRoot("/run/media");
-#endif
-        }
-
-        AddDirectory(Application.streamingAssetsPath);
-        AddDirectory(Application.persistentDataPath);
-        AddDirectory(Path.GetDirectoryName(Application.dataPath));
-        AddDirectory(Environment.CurrentDirectory);
-        AddExternalMediaCandidates();
-
-        return candidates;
-    }
-
-    private List<Vector3> BuildProceduralTrack()
-    {
-        hasCourseBounds = TryGetSceneBounds(out courseBounds);
-        Vector3 center = hasCourseBounds ? courseBounds.center : Vector3.zero;
-        float height = hasCourseBounds ? Mathf.Max(courseBounds.extents.y, 8f) : 12f;
-        float radiusX = hasCourseBounds ? Mathf.Max(courseBounds.extents.x * 1.6f, 18f) : 22f;
-        float radiusZ = hasCourseBounds ? Mathf.Max(courseBounds.extents.z * 1.6f, 18f) : 22f;
-        float baseHeight = hasCourseBounds ? Mathf.Max(center.y + courseBounds.extents.y * 0.55f, 6f) : 8f;
-
-        List<Vector3> positions = new List<Vector3>(8);
-        for (int index = 0; index < 8; index++)
-        {
-            float angle = (Mathf.PI * 2f * index / 8f) + (Mathf.PI * 0.2f);
-            float x = Mathf.Cos(angle) * radiusX;
-            float z = Mathf.Sin(angle) * radiusZ;
-            float yOffset = Mathf.Sin(angle * 2f) * (height * 0.25f) + ((index % 2 == 0) ? 2f : -1.5f);
-            positions.Add(center + new Vector3(x, baseHeight + yOffset, z));
-        }
-
-        return positions;
-    }
-
-    private void ConvertTrackCoordinatesToWorldSpace()
-    {
-        if (checkpointPositions.Count == 0 || !interpretTrackCoordinatesAsModelLocal)
-            return;
-
-        Transform trackAnchor = FindTrackAnchor();
-        if (trackAnchor == null)
-        {
-            Debug.LogWarning($"Track anchor '{trackAnchorObjectName}' was not found. Using track coordinates as world positions.");
-            return;
-        }
-
-        for (int index = 0; index < checkpointPositions.Count; index++)
-        {
-            Vector3 localPosition = checkpointPositions[index] * ImportedTrackCoordinateScale;
-            checkpointPositions[index] = trackAnchor.TransformPoint(localPosition);
-        }
-    }
-
-    private void AlignCheckpointHeightsToSurface()
-    {
-        if (!snapCheckpointHeightToSurface || checkpointPositions.Count == 0)
-            return;
-
-        hasCourseBounds = TryGetSceneBounds(out courseBounds);
-        if (!hasCourseBounds)
-            return;
-
-        for (int index = 0; index < checkpointPositions.Count; index++)
-        {
-            Vector3 checkpointPosition = checkpointPositions[index];
-            Vector3 probeOrigin = new Vector3(checkpointPosition.x, courseBounds.max.y + SurfaceProbePadding, checkpointPosition.z);
-            if (TryProjectCheckpointHeight(probeOrigin, out Vector3 groundedPosition))
-                checkpointPositions[index] = groundedPosition;
-        }
-    }
-
-    private Transform FindTrackAnchor()
-    {
-        foreach (Transform sceneTransform in FindObjectsOfType<Transform>(true))
-        {
-            if (sceneTransform != null &&
-                sceneTransform.name.Equals(trackAnchorObjectName, StringComparison.OrdinalIgnoreCase))
-                return sceneTransform;
-        }
-
-        return null;
-    }
-
-    private bool TryProjectCheckpointHeight(Vector3 probeOrigin, out Vector3 groundedPosition)
-    {
-        float rayLength = (courseBounds.size.y + SurfaceProbePadding * 2f) + 1f;
-        RaycastHit[] hits = Physics.RaycastAll(probeOrigin, Vector3.down, rayLength, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
-
-        Array.Sort(hits, (left, right) => right.point.y.CompareTo(left.point.y));
-
-        foreach (RaycastHit hit in hits)
-        {
-            if (!IsValidSurfaceHit(hit))
-                continue;
-
-            groundedPosition = hit.point + Vector3.up * CheckpointSurfaceOffset;
-            return true;
-        }
-
-        groundedPosition = default;
-        return false;
-    }
-
-    private bool IsValidSurfaceHit(RaycastHit hit)
-    {
-        if (hit.collider == null || hit.collider.isTrigger)
-            return false;
-
-        Transform hitTransform = hit.collider.transform;
-        if (hitTransform.IsChildOf(transform) || hitTransform.IsChildOf(drone))
-            return false;
-
-        return true;
-    }
-
-    private void BuildTrackVisuals()
-    {
-        checkpoints.Clear();
-        checkpointComponents.Clear();
-
-        hasCourseBounds = TryGetSceneBounds(out courseBounds);
-
-        for (int index = 0; index < checkpointPositions.Count; index++)
-        {
-            Vector3 previousPosition = index > 0 ? checkpointPositions[index - 1] : checkpointPositions[index];
-            Vector3 facingPosition = checkpointPositions[Mathf.Min(index + 1, checkpointPositions.Count - 1)];
-            if (index == checkpointPositions.Count - 1)
-                facingPosition = checkpointPositions[index];
-
-            RaceCheckpoint checkpoint = CreateCheckpoint(index, checkpointPositions[index], previousPosition, facingPosition);
-            checkpoints.Add(checkpoint.transform);
-            checkpointComponents.Add(checkpoint);
-        }
-    }
-
-    private RaceCheckpoint CreateCheckpoint(int index, Vector3 position, Vector3 previousPosition, Vector3 facingPosition)
-    {
-        GameObject checkpointRoot = new GameObject($"Checkpoint {index + 1}");
-        checkpointRoot.transform.SetParent(transform, false);
-        checkpointRoot.transform.position = position;
-        checkpointRoot.transform.rotation = Quaternion.LookRotation(
-            (facingPosition - position).sqrMagnitude > 0.001f ? facingPosition - position : Vector3.forward,
-            Vector3.up);
-
-        SphereCollider trigger = checkpointRoot.AddComponent<SphereCollider>();
-        trigger.isTrigger = true;
-        trigger.radius = checkpointReachRadius;
-
-        RaceCheckpoint checkpoint = checkpointRoot.AddComponent<RaceCheckpoint>();
-        checkpoint.Initialize(index);
-        checkpoint.CacheRenderers(previousPosition);
-        checkpoint.SetState(CheckpointVisualState.Pending);
-        return checkpoint;
-    }
-
-    private void ClearTrackObjects()
-    {
-        foreach (RaceCheckpoint checkpoint in checkpointComponents)
-        {
-            if (checkpoint != null)
-                Destroy(checkpoint.gameObject);
-        }
-
-        checkpoints.Clear();
-        checkpointComponents.Clear();
-        checkpointPositions.Clear();
-    }
-
-    private bool TryGetSceneBounds(out Bounds bounds)
-    {
-        Renderer[] renderers = FindObjectsOfType<Renderer>();
-        bool foundBounds = false;
-        bounds = default;
-
-        foreach (Renderer sceneRenderer in renderers)
-        {
-            if (!sceneRenderer.enabled || sceneRenderer.transform.IsChildOf(transform) || sceneRenderer.transform.IsChildOf(drone))
-                continue;
-
-            if (sceneRenderer is TrailRenderer)
-                continue;
-
-            if (!foundBounds)
-            {
-                bounds = sceneRenderer.bounds;
-                foundBounds = true;
-            }
-            else
-            {
-                bounds.Encapsulate(sceneRenderer.bounds);
-            }
-        }
-
-        return foundBounds;
     }
 
     private IEnumerator ClearMessageAfterDelay(float delay)
