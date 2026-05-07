@@ -42,6 +42,9 @@ public class Gameplay : MonoBehaviour
         if (drone == null)
             drone = transform;
 
+        if (gameplayText == null)
+            gameplayText = FindVisibleGameplayText();
+
         if (travelScript == null)
             travelScript = drone.GetComponent<Travel>();
 
@@ -292,24 +295,32 @@ public class Gameplay : MonoBehaviour
             return;
 
         string timerString = "Time: " + FormatTime(timer);
+        int checkpointsPassed = checkpoints.Count == 0
+            ? 0
+            : Mathf.Clamp(lastClearedCheckpointIndex + 1, 0, checkpoints.Count);
 
         string checkpointString;
+        string distanceString;
 
         if (raceFinished)
         {
             checkpointString =
                 "Checkpoints: " +
                 checkpoints.Count + "/" + checkpoints.Count;
+            distanceString = "Distance: 0.0m";
         }
         else
         {
+            float distanceToNextCheckpoint = GetDistanceToNextCheckpoint();
+
             checkpointString =
                 "Checkpoints: " +
-                (lastClearedCheckpointIndex + 1) +
+                checkpointsPassed +
                 "/" +
                 checkpoints.Count +
                 "\nNext: " +
                 (currentCheckpointIndex + 1);
+            distanceString = "Distance: " + distanceToNextCheckpoint.ToString("0.0") + "m";
         }
 
         gameplayText.text =
@@ -317,7 +328,37 @@ public class Gameplay : MonoBehaviour
             "\n" +
             checkpointString +
             "\n" +
+            distanceString +
+            "\n" +
             currentMessage;
+    }
+
+    private float GetDistanceToNextCheckpoint()
+    {
+        if (drone == null || currentCheckpointIndex < 0 || currentCheckpointIndex >= checkpoints.Count)
+            return 0f;
+
+        Transform nextCheckpoint = checkpoints[currentCheckpointIndex];
+        if (nextCheckpoint == null)
+            return 0f;
+
+        return Vector3.Distance(drone.position, nextCheckpoint.position);
+    }
+
+    private TMP_Text FindVisibleGameplayText()
+    {
+        TMP_Text[] texts = FindObjectsOfType<TMP_Text>(true);
+
+        foreach (TMP_Text text in texts)
+        {
+            if (text == null)
+                continue;
+
+            if (text.name == "Text (TMP)")
+                return text;
+        }
+
+        return null;
     }
 
     private string FormatTime(float time)
