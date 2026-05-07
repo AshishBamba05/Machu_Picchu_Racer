@@ -10,7 +10,8 @@ public enum CheckpointVisualState
 [DisallowMultipleComponent]
 public class RaceCheckpoint : MonoBehaviour
 {
-    private static readonly Color BasePoleColor = new(0.15f, 0.65f, 1f);
+    private static readonly Color PendingCheckpointColor = new(0.15f, 0.65f, 1f);
+    private static readonly Color CompletedCheckpointColor = new(0.5f, 0.32f, 0.16f);
     private const float HeadArrowBaseDistance = 0.75f;
     private const float HeadArrowBaseHeight = 0.18f;
     private const float DefaultPoleHeight = 10f;
@@ -93,7 +94,7 @@ public class RaceCheckpoint : MonoBehaviour
             activeEmissionMax,
             0.5f + 0.5f * Mathf.Sin(Time.time * activePulseSpeed));
 
-        ApplyVisuals(BasePoleColor, pulse);
+        ApplyVisuals(PendingCheckpointColor, pulse);
 
         if (EnsureHeadArrow())
         {
@@ -106,7 +107,7 @@ public class RaceCheckpoint : MonoBehaviour
     {
         currentState = state;
         var emission = state == CheckpointVisualState.Active ? activeEmissionMax : activeEmissionMin;
-        ApplyVisuals(BasePoleColor, emission);
+        ApplyVisuals(GetStateColor(state), emission);
 
         if (state == CheckpointVisualState.Active)
         {
@@ -120,6 +121,16 @@ public class RaceCheckpoint : MonoBehaviour
         {
             headArrowRoot.gameObject.SetActive(false);
         }
+    }
+
+    private static Color GetStateColor(CheckpointVisualState state)
+    {
+        return state switch
+        {
+            CheckpointVisualState.Active => PendingCheckpointColor,
+            CheckpointVisualState.Completed => CompletedCheckpointColor,
+            _ => PendingCheckpointColor
+        };
     }
 
     private bool EnsureHeadArrow()
@@ -160,7 +171,7 @@ public class RaceCheckpoint : MonoBehaviour
         var planarDirection = new Vector2(localDirection.x, localDirection.y);
         if (planarDirection.sqrMagnitude < 0.0001f)
         {
-            planarDirection = Vector2.down;
+            planarDirection = localDirection.z >= 0f ? Vector2.down : Vector2.up;
         }
 
         planarDirection.Normalize();
@@ -169,7 +180,7 @@ public class RaceCheckpoint : MonoBehaviour
             HeadArrowBaseHeight + bobOffset + planarDirection.y * 0.12f,
             HeadArrowBaseDistance);
 
-        var angle = Mathf.Atan2(-planarDirection.x, -planarDirection.y) * Mathf.Rad2Deg;
+        var angle = Vector2.SignedAngle(Vector2.down, planarDirection);
         headArrowRoot.localRotation = Quaternion.Euler(0f, 0f, angle);
     }
 
