@@ -11,7 +11,7 @@ public class Travel : MonoBehaviour
     [Header("Speeds")]
     public float moveSpeed = 35f;
     public float verticalSpeed = 20f;
-    public float rotationSpeed = 240f;
+    public float rotationSpeed = 300f;
 
     [Header("Right Hand Thresholds")]
     public float fistThreshold = 0.075f;
