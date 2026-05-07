@@ -8,24 +8,16 @@ public class Travel : MonoBehaviour
     [Header("Drone")]
     public Transform drone;
 
-    [Header("Palm Forward + Rotation")]
+    [Header("Movement")]
     public float moveSpeed = 2f;
-    public float rotationSpeed = 12f;
-    public float forwardDeadZone = 0.45f;
-    public float rotationDeadZone = 0.4f;
-    public float smoothingSpeed = 10f;
-
-    [Header("Thumbs Up / Down Vertical Movement")]
     public float verticalSpeed = 2f;
+    public float rotationSpeed = 12f;
+
+    [Header("Gesture Thresholds")]
+    public float fistThreshold = 0.09f;
     public float thumbHeightThreshold = 0.08f;
     public float curledFingerThreshold = 0.11f;
-
-    [Header("Fist Stop")]
-    public float fistThreshold = 0.09f;
-
-    [Header("Palm Direction Visual")]
-    public LineRenderer palmDirectionLine;
-    public float palmRayLength = 3f;
+    public float rotationDeadZone = 0.25f;
 
     [Header("Gameplay Lock")]
     public bool canMove = true;
@@ -33,9 +25,6 @@ public class Travel : MonoBehaviour
     public event Action<Collider> TriggerEntered;
 
     private XRHandSubsystem handSubsystem;
-
-    private Vector3 smoothedPalmForward;
-    private bool hasSmoothedPalmForward = false;
 
     void Start()
     {
@@ -59,72 +48,33 @@ public class Travel : MonoBehaviour
         XRHand rightHand = handSubsystem.rightHand;
 
         if (!rightHand.isTracked)
-        {
-            StopPalmVisual();
-            hasSmoothedPalmForward = false;
             return;
+
+        if (!TryGetPalmPose(rightHand, out Pose palmPose))
+            return;
+
+        bool fist = IsFist(rightHand, palmPose.position);
+        bool thumbsUp = IsThumbsUp(rightHand, palmPose.position);
+        bool thumbsDown = IsThumbsDown(rightHand, palmPose.position);
+
+        // Wrist left / right controls rotation
+        HandleWristRotation(palmPose);
+
+        // Fist moves drone forward
+        if (fist)
+        {
+            drone.position += drone.forward * moveSpeed * Time.deltaTime;
         }
 
-        if (!TryGetPalmPose(rightHand, out Pose rightPalmPose))
-        {
-            StopPalmVisual();
-            hasSmoothedPalmForward = false;
-            return;
-        }
-
-        ShowPalmDirection(rightPalmPose);
-
-        // Fist = stop everything
-        if (IsFist(rightHand, rightPalmPose.position))
-        {
-            hasSmoothedPalmForward = false;
-            return;
-        }
-
-        bool thumbsUp = IsThumbsUp(rightHand, rightPalmPose.position);
-        bool thumbsDown = IsThumbsDown(rightHand, rightPalmPose.position);
-
-        HandlePalmForwardAndRotation(rightPalmPose);
+        // Thumbs up / down controls vertical movement
         HandleThumbVerticalMovement(thumbsUp, thumbsDown);
     }
 
-    private void HandlePalmForwardAndRotation(Pose palmPose)
+    private void HandleWristRotation(Pose palmPose)
     {
-        Vector3 rawPalmForward = palmPose.rotation * Vector3.forward;
+        Vector3 palmRight = palmPose.rotation * Vector3.right;
 
-        // If forward feels reversed, change the line above to:
-        // Vector3 rawPalmForward = palmPose.rotation * -Vector3.forward;
-
-        if (!hasSmoothedPalmForward)
-        {
-            smoothedPalmForward = rawPalmForward;
-            hasSmoothedPalmForward = true;
-        }
-        else
-        {
-            smoothedPalmForward = Vector3.Slerp(
-                smoothedPalmForward,
-                rawPalmForward,
-                smoothingSpeed * Time.deltaTime
-            );
-        }
-
-        smoothedPalmForward.Normalize();
-
-        // Forward only
-        float forwardAmount = Vector3.Dot(smoothedPalmForward, drone.forward);
-
-        if (forwardAmount > forwardDeadZone)
-        {
-            drone.position +=
-                drone.forward *
-                forwardAmount *
-                moveSpeed *
-                Time.deltaTime;
-        }
-
-        // Left / right rotation
-        float turnAmount = Vector3.Dot(smoothedPalmForward, drone.right);
+        float turnAmount = palmRight.y;
 
         if (Mathf.Abs(turnAmount) > rotationDeadZone)
         {
@@ -146,89 +96,6 @@ public class Travel : MonoBehaviour
         {
             drone.position += Vector3.down * verticalSpeed * Time.deltaTime;
         }
-    }
-
-    private bool IsThumbsUp(XRHand hand, Vector3 palmPosition)
-    {
-        XRHandJoint thumbTip = hand.GetJoint(XRHandJointID.ThumbTip);
-
-        if (!thumbTip.TryGetPose(out Pose thumbPose))
-            return false;
-
-        bool thumbIsHigh =
-            thumbPose.position.y - palmPosition.y > thumbHeightThreshold;
-
-        return thumbIsHigh && AreOtherFingersCurled(hand, palmPosition);
-    }
-
-    private bool IsThumbsDown(XRHand hand, Vector3 palmPosition)
-    {
-        XRHandJoint thumbTip = hand.GetJoint(XRHandJointID.ThumbTip);
-
-        if (!thumbTip.TryGetPose(out Pose thumbPose))
-            return false;
-
-        bool thumbIsLow =
-            palmPosition.y - thumbPose.position.y > thumbHeightThreshold;
-
-        return thumbIsLow && AreOtherFingersCurled(hand, palmPosition);
-    }
-
-    private bool AreOtherFingersCurled(XRHand hand, Vector3 palmPosition)
-    {
-        XRHandJointID[] fingerTips =
-        {
-            XRHandJointID.IndexTip,
-            XRHandJointID.MiddleTip,
-            XRHandJointID.RingTip,
-            XRHandJointID.LittleTip
-        };
-
-        int curledCount = 0;
-
-        foreach (XRHandJointID jointID in fingerTips)
-        {
-            XRHandJoint joint = hand.GetJoint(jointID);
-
-            if (joint.TryGetPose(out Pose tipPose))
-            {
-                float distance = Vector3.Distance(
-                    tipPose.position,
-                    palmPosition
-                );
-
-                if (distance < curledFingerThreshold)
-                    curledCount++;
-            }
-        }
-
-        // At least 3 fingers curled = clear thumbs up/down gesture
-        return curledCount >= 3;
-    }
-
-    private void ShowPalmDirection(Pose palmPose)
-    {
-        if (palmDirectionLine == null)
-            return;
-
-        Vector3 start = palmPose.position;
-        Vector3 direction = palmPose.rotation * Vector3.forward;
-
-        // If your palm visual points backward, change the line above to:
-        // Vector3 direction = palmPose.rotation * -Vector3.forward;
-
-        Vector3 end = start + direction.normalized * palmRayLength;
-
-        palmDirectionLine.enabled = true;
-        palmDirectionLine.positionCount = 2;
-        palmDirectionLine.SetPosition(0, start);
-        palmDirectionLine.SetPosition(1, end);
-    }
-
-    private void StopPalmVisual()
-    {
-        if (palmDirectionLine != null)
-            palmDirectionLine.enabled = false;
     }
 
     private void OnTriggerEnter(Collider other)
@@ -287,5 +154,62 @@ public class Travel : MonoBehaviour
         float averageDistance = totalDistance / count;
 
         return averageDistance < fistThreshold;
+    }
+
+    private bool IsThumbsUp(XRHand hand, Vector3 palmPosition)
+    {
+        XRHandJoint thumbTip = hand.GetJoint(XRHandJointID.ThumbTip);
+
+        if (!thumbTip.TryGetPose(out Pose thumbPose))
+            return false;
+
+        bool thumbIsHigh =
+            thumbPose.position.y - palmPosition.y > thumbHeightThreshold;
+
+        return thumbIsHigh && AreOtherFingersCurled(hand, palmPosition);
+    }
+
+    private bool IsThumbsDown(XRHand hand, Vector3 palmPosition)
+    {
+        XRHandJoint thumbTip = hand.GetJoint(XRHandJointID.ThumbTip);
+
+        if (!thumbTip.TryGetPose(out Pose thumbPose))
+            return false;
+
+        bool thumbIsLow =
+            palmPosition.y - thumbPose.position.y > thumbHeightThreshold;
+
+        return thumbIsLow && AreOtherFingersCurled(hand, palmPosition);
+    }
+
+    private bool AreOtherFingersCurled(XRHand hand, Vector3 palmPosition)
+    {
+        XRHandJointID[] fingerTips =
+        {
+            XRHandJointID.IndexTip,
+            XRHandJointID.MiddleTip,
+            XRHandJointID.RingTip,
+            XRHandJointID.LittleTip
+        };
+
+        int curledCount = 0;
+
+        foreach (XRHandJointID jointID in fingerTips)
+        {
+            XRHandJoint joint = hand.GetJoint(jointID);
+
+            if (joint.TryGetPose(out Pose tipPose))
+            {
+                float distance = Vector3.Distance(
+                    tipPose.position,
+                    palmPosition
+                );
+
+                if (distance < curledFingerThreshold)
+                    curledCount++;
+            }
+        }
+
+        return curledCount >= 3;
     }
 }
