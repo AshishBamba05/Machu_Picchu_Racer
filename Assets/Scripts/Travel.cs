@@ -9,14 +9,14 @@ public class Travel : MonoBehaviour
     public Transform drone;
 
     [Header("Speeds")]
-    public float moveSpeed = 0.25f;
-    public float verticalSpeed = 0.8f;
-    public float rotationSpeed = 14f;
+    public float moveSpeed = 0.12f;
+    public float verticalSpeed = 0.35f;
+    public float rotationSpeed = 20f;
 
     [Header("Right Hand Thresholds")]
     public float fistThreshold = 0.075f;
-    public float thumbHeightThreshold = 0.06f;
-    public float thumbSideThreshold = 0.04f;
+    public float thumbHeightThreshold = 0.08f;
+    public float thumbNeutralThreshold = 0.04f;
 
     [Header("Left Thumb Rotation")]
     public float leftThumbRotationDeadZone = 0.25f;
@@ -65,28 +65,44 @@ public class Travel : MonoBehaviour
 
         bool fist = IsFistWithoutThumb(rightHand, palmPose.position);
 
-        // No fist = no right-hand movement
         if (!fist)
             return;
 
-        bool fistThumbUp = IsFistThumbUp(rightHand, palmPose.position);
-        bool fistThumbDown = IsFistThumbDown(rightHand, palmPose.position);
+        float thumbOffset = GetThumbVerticalOffset(
+            rightHand,
+            palmPose.position
+        );
 
-        // Fist + thumb up/down = vertical only
-        if (fistThumbUp)
+        // Fist + thumb up = ONLY up
+        if (thumbOffset > thumbHeightThreshold)
         {
             drone.position += Vector3.up * verticalSpeed * Time.deltaTime;
             return;
         }
 
-        if (fistThumbDown)
+        // Fist + thumb down = ONLY down
+        if (thumbOffset < -thumbHeightThreshold)
         {
             drone.position += Vector3.down * verticalSpeed * Time.deltaTime;
             return;
         }
 
-        // Plain fist = forward only
-        drone.position += drone.forward * moveSpeed * Time.deltaTime;
+        // Plain fist only moves forward when thumb is neutral.
+        // This prevents forward movement during thumb up/down.
+        if (Mathf.Abs(thumbOffset) < thumbNeutralThreshold)
+        {
+            drone.position += drone.forward * moveSpeed * Time.deltaTime;
+        }
+    }
+
+    private float GetThumbVerticalOffset(XRHand hand, Vector3 palmPosition)
+    {
+        XRHandJoint thumbTip = hand.GetJoint(XRHandJointID.ThumbTip);
+
+        if (!thumbTip.TryGetPose(out Pose thumbPose))
+            return 0f;
+
+        return thumbPose.position.y - palmPosition.y;
     }
 
     private void HandleLeftThumbRotation(XRHand leftHand)
@@ -157,33 +173,7 @@ public class Travel : MonoBehaviour
             }
         }
 
-        // Require all four fingers curled.
-        // Thumb is NOT included, so thumb can still point up/down.
         return curledCount >= 4;
-    }
-
-    private bool IsFistThumbUp(XRHand hand, Vector3 palmPosition)
-    {
-        XRHandJoint thumbTip = hand.GetJoint(XRHandJointID.ThumbTip);
-
-        if (!thumbTip.TryGetPose(out Pose thumbPose))
-            return false;
-
-        float verticalOffset = thumbPose.position.y - palmPosition.y;
-
-        return verticalOffset > thumbHeightThreshold;
-    }
-
-    private bool IsFistThumbDown(XRHand hand, Vector3 palmPosition)
-    {
-        XRHandJoint thumbTip = hand.GetJoint(XRHandJointID.ThumbTip);
-
-        if (!thumbTip.TryGetPose(out Pose thumbPose))
-            return false;
-
-        float verticalOffset = palmPosition.y - thumbPose.position.y;
-
-        return verticalOffset > thumbHeightThreshold;
     }
 
     private void OnTriggerEnter(Collider other)
