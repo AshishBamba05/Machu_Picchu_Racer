@@ -12,8 +12,8 @@ public class Travel : MonoBehaviour
     public Transform headsetCamera;
 
     [Header("Forward / Backward Movement")]
-    public float forwardSpeed = 85f;
-    public float backwardSpeed = 60f;
+    public float forwardSpeed = 60f;
+    public float backwardSpeed = 50f;
     public float movementDeadZone = 0.012f;
 
     [Header("Up / Down Movement")]
@@ -21,8 +21,8 @@ public class Travel : MonoBehaviour
     public float thumbHeightThreshold = 0.08f;
 
     [Header("Rotation")]
-    public float turnSpeed = 55f;
-    public float turnDeadZone = 0.02f;
+    public float rotationSpeed = 65f;
+    public float pointingDeadZone = 0.08f;
 
     [Header("Gesture Detection")]
     public float fistThreshold = 0.09f;
@@ -36,9 +36,6 @@ public class Travel : MonoBehaviour
 
     private bool hasNeutralFistPosition = false;
     private Vector3 neutralFistCenter;
-
-    private bool isRotating = false;
-    private Quaternion lastRightPalmRotation;
 
     void Start()
     {
@@ -68,7 +65,6 @@ public class Travel : MonoBehaviour
         if (!leftHand.isTracked || !rightHand.isTracked)
         {
             hasNeutralFistPosition = false;
-            isRotating = false;
             return;
         }
 
@@ -87,7 +83,7 @@ public class Travel : MonoBehaviour
 
         HandleForwardBackwardMovement(leftPalmPose, rightPalmPose, leftFist, rightFist);
         HandleVerticalMovement(leftThumbUp, rightThumbUp, leftThumbDown, rightThumbDown);
-        HandleRotation(rightPalmPose, leftFist, rightFist);
+        HandlePointingRotation(rightHand, rightFist);
     }
 
     private void HandleForwardBackwardMovement(Pose leftPalmPose, Pose rightPalmPose, bool leftFist, bool rightFist)
@@ -138,36 +134,31 @@ public class Travel : MonoBehaviour
         }
     }
 
-    private void HandleRotation(Pose rightPalmPose, bool leftFist, bool rightFist)
+    private void HandlePointingRotation(XRHand rightHand, bool rightFist)
     {
-        // Right fist only = rotation mode.
-        // Release right fist to reset your hand without rotating the drone back.
-        if (rightFist && !leftFist)
-        {
-            if (!isRotating)
-            {
-                lastRightPalmRotation = rightPalmPose.rotation;
-                isRotating = true;
-            }
+        // Right index finger pointing = drone rotates toward that pointing direction.
+        // If right hand is a fist, do not rotate, because fist is used for movement.
+        if (rightFist)
+            return;
 
-            Quaternion deltaRotation = rightPalmPose.rotation * Quaternion.Inverse(lastRightPalmRotation);
+        if (!TryGetIndexPointDirection(rightHand, out Vector3 pointDirection))
+            return;
 
-            float yawDelta = deltaRotation.eulerAngles.y;
+        pointDirection.y = 0f;
 
-            if (yawDelta > 180f)
-                yawDelta -= 360f;
+        if (pointDirection.magnitude < pointingDeadZone)
+            return;
 
-            if (Mathf.Abs(yawDelta) > turnDeadZone)
-            {
-                drone.Rotate(Vector3.up, yawDelta * turnSpeed * Time.deltaTime, Space.World);
-            }
+        pointDirection.Normalize();
 
-            lastRightPalmRotation = rightPalmPose.rotation;
-        }
-        else
-        {
-            isRotating = false;
-        }
+        Quaternion targetRotation = Quaternion.LookRotation(pointDirection, Vector3.up);
+
+        // Smooth rotation so it is not too sensitive or snappy.
+        drone.rotation = Quaternion.RotateTowards(
+            drone.rotation,
+            targetRotation,
+            rotationSpeed * Time.deltaTime
+        );
     }
 
     private void OnTriggerEnter(Collider other)
@@ -189,6 +180,21 @@ public class Travel : MonoBehaviour
     {
         XRHandJoint palm = hand.GetJoint(XRHandJointID.Palm);
         return palm.TryGetPose(out pose);
+    }
+
+    private bool TryGetIndexPointDirection(XRHand hand, out Vector3 direction)
+    {
+        direction = Vector3.zero;
+
+        XRHandJoint indexTip = hand.GetJoint(XRHandJointID.IndexTip);
+        XRHandJoint indexBase = hand.GetJoint(XRHandJointID.IndexProximal);
+
+        if (!indexTip.TryGetPose(out Pose tipPose) ||
+            !indexBase.TryGetPose(out Pose basePose))
+            return false;
+
+        direction = tipPose.position - basePose.position;
+        return direction.sqrMagnitude > 0.0001f;
     }
 
     private bool IsFist(XRHand hand, Vector3 palmPosition)
