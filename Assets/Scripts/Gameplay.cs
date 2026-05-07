@@ -2,11 +2,12 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
+using UnityEngine.UI;
 
 public class Gameplay : MonoBehaviour
 {
     private const string VisibleGameplayTextName = "Text (TMP)";
-    private const string CountdownOverlayName = "Countdown Overlay Text";
+    private const string CountdownOverlayName = "Countdown Overlay Canvas";
 
     [Header("References")]
     public Travel travelScript;
@@ -190,7 +191,7 @@ public class Gameplay : MonoBehaviour
 
     private void HandleDroneTriggerEntered(Collider other)
     {
-        if (other == null || raceFinished || isInCrashPenalty)
+        if (other == null || raceFinished || isInCrashPenalty || !raceReady || !timerRunning)
             return;
 
         // Ignore checkpoints
@@ -206,7 +207,7 @@ public class Gameplay : MonoBehaviour
 
     private void OnCollisionEnter(Collision collision)
     {
-        if (collision == null || raceFinished || isInCrashPenalty)
+        if (collision == null || raceFinished || isInCrashPenalty || !raceReady || !timerRunning)
             return;
 
         if (collision.transform.root == drone.root)
@@ -217,7 +218,7 @@ public class Gameplay : MonoBehaviour
 
     public void OnCrash()
     {
-        if (raceFinished || isInCrashPenalty)
+        if (raceFinished || isInCrashPenalty || !raceReady || !timerRunning)
             return;
 
         StartCoroutine(CrashPenalty());
@@ -382,27 +383,48 @@ public class Gameplay : MonoBehaviour
         Transform existing = mainCamera.transform.Find(CountdownOverlayName);
         if (existing != null)
         {
-            countdownText = existing.GetComponent<TMP_Text>();
+            countdownText = existing.GetComponentInChildren<TMP_Text>(true);
             return;
         }
 
-        GameObject countdownObject = new GameObject(CountdownOverlayName);
-        countdownObject.transform.SetParent(mainCamera.transform, false);
-        countdownObject.transform.localPosition = new Vector3(0f, 0f, 1.05f);
-        countdownObject.transform.localRotation = Quaternion.identity;
-        countdownObject.transform.localScale = Vector3.one * 0.0022f;
+        GameObject countdownCanvasObject = new GameObject(CountdownOverlayName);
+        countdownCanvasObject.transform.SetParent(mainCamera.transform, false);
+        countdownCanvasObject.transform.localPosition = new Vector3(0f, 0f, 1.1f);
+        countdownCanvasObject.transform.localRotation = Quaternion.identity;
+        countdownCanvasObject.transform.localScale = new Vector3(0.0022f, 0.0022f, 0.0022f);
 
-        TextMeshPro countdownWorldText = countdownObject.AddComponent<TextMeshPro>();
-        countdownWorldText.font = TMP_Settings.defaultFontAsset;
-        countdownWorldText.alignment = TextAlignmentOptions.Center;
-        countdownWorldText.fontSize = 5.8f;
-        countdownWorldText.color = new Color(1f, 0.95f, 0.7f);
-        countdownWorldText.enableWordWrapping = false;
-        countdownWorldText.overflowMode = TextOverflowModes.Overflow;
-        countdownWorldText.rectTransform.sizeDelta = new Vector2(900f, 320f);
-        countdownWorldText.text = string.Empty;
+        Canvas countdownCanvas = countdownCanvasObject.AddComponent<Canvas>();
+        countdownCanvas.renderMode = RenderMode.WorldSpace;
+        countdownCanvas.worldCamera = mainCamera;
 
-        countdownText = countdownWorldText;
+        CanvasScaler scaler = countdownCanvasObject.AddComponent<CanvasScaler>();
+        scaler.dynamicPixelsPerUnit = 20f;
+
+        countdownCanvasObject.AddComponent<GraphicRaycaster>();
+
+        RectTransform canvasRect = countdownCanvas.GetComponent<RectTransform>();
+        canvasRect.sizeDelta = new Vector2(1200f, 600f);
+
+        GameObject countdownTextObject = new GameObject("Countdown Text");
+        countdownTextObject.transform.SetParent(countdownCanvasObject.transform, false);
+
+        TextMeshProUGUI countdownUiText = countdownTextObject.AddComponent<TextMeshProUGUI>();
+        countdownUiText.font = TMP_Settings.defaultFontAsset;
+        countdownUiText.alignment = TextAlignmentOptions.Center;
+        countdownUiText.fontSize = 220f;
+        countdownUiText.color = new Color(1f, 0.95f, 0.7f);
+        countdownUiText.enableWordWrapping = false;
+        countdownUiText.overflowMode = TextOverflowModes.Overflow;
+        countdownUiText.text = string.Empty;
+
+        RectTransform textRect = countdownUiText.rectTransform;
+        textRect.anchorMin = new Vector2(0.5f, 0.5f);
+        textRect.anchorMax = new Vector2(0.5f, 0.5f);
+        textRect.pivot = new Vector2(0.5f, 0.5f);
+        textRect.anchoredPosition = Vector2.zero;
+        textRect.sizeDelta = new Vector2(1200f, 600f);
+
+        countdownText = countdownUiText;
     }
 
     private void SetCountdownOverlay(string message, Color color)
@@ -414,6 +436,7 @@ public class Gameplay : MonoBehaviour
 
         countdownText.text = message;
         countdownText.color = color;
+        countdownText.fontSize = message == "GO!" ? 260f : 220f;
         countdownText.gameObject.SetActive(!string.IsNullOrEmpty(message));
     }
 
