@@ -41,6 +41,7 @@ public class Gameplay : MonoBehaviour
 
     private string currentMessage = "";
     private TMP_Text countdownText;
+    private DroneRaceAudio raceAudio;
 
     private void Start()
     {
@@ -55,6 +56,13 @@ public class Gameplay : MonoBehaviour
 
         if (travelScript == null)
             travelScript = drone.GetComponent<Travel>();
+
+        raceAudio = drone.GetComponent<DroneRaceAudio>();
+        if (raceAudio == null)
+            raceAudio = drone.gameObject.AddComponent<DroneRaceAudio>();
+
+        raceAudio.Initialize(drone);
+        raceAudio.SetEngineActive(false);
 
         if (travelScript != null)
         {
@@ -144,12 +152,14 @@ public class Gameplay : MonoBehaviour
 
         while (count > 0)
         {
+            raceAudio?.PlayCountdownTick(Mathf.CeilToInt(count));
             SetCountdownOverlay(Mathf.CeilToInt(count).ToString(), new Color(1f, 0.95f, 0.7f));
 
             yield return new WaitForSeconds(1f);
             count--;
         }
 
+        raceAudio?.PlayCountdownGo();
         SetCountdownOverlay("GO!", new Color(0.55f, 1f, 0.65f));
 
         yield return new WaitForSeconds(1f);
@@ -157,6 +167,7 @@ public class Gameplay : MonoBehaviour
         SetCountdownOverlay(string.Empty, Color.white);
 
         timerRunning = true;
+        raceAudio?.SetEngineActive(true);
 
         if (travelScript != null)
             travelScript.canMove = true;
@@ -185,6 +196,7 @@ public class Gameplay : MonoBehaviour
                 return;
             }
 
+            raceAudio?.PlayCheckpoint();
             currentMessage = "Checkpoint reached!";
 
             StartCoroutine(ClearMessageAfterDelay(1f));
@@ -229,6 +241,8 @@ public class Gameplay : MonoBehaviour
     private IEnumerator CrashPenalty()
     {
         isInCrashPenalty = true;
+        raceAudio?.SetEngineActive(false);
+        raceAudio?.PlayCrash();
 
         if (travelScript != null)
             travelScript.canMove = false;
@@ -251,6 +265,8 @@ public class Gameplay : MonoBehaviour
             travelScript.canMove = true;
 
         isInCrashPenalty = false;
+        if (!raceFinished)
+            raceAudio?.SetEngineActive(true);
     }
 
     private void MoveDroneToCheckpoint(int checkpointIndex)
@@ -284,6 +300,8 @@ public class Gameplay : MonoBehaviour
     {
         raceFinished = true;
         timerRunning = false;
+        raceAudio?.SetEngineActive(false);
+        raceAudio?.PlayFinish();
 
         if (travelScript != null)
             travelScript.canMove = false;
