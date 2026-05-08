@@ -6,6 +6,8 @@ using UnityEngine.UI;
 
 public class Gameplay : MonoBehaviour
 {
+    private const float MetersToFeet = 3.28084f;
+
     private const string VisibleGameplayTextName = "Text (TMP)";
     private const string CountdownOverlayName = "Countdown Overlay Canvas";
 
@@ -395,7 +397,7 @@ public class Gameplay : MonoBehaviour
             checkpointString =
                 "Checkpoints: " +
                 checkpoints.Count + "/" + checkpoints.Count;
-            distanceString = "Distance: 0.0m";
+            distanceString = "Distance: 0.0ft";
         }
         else
         {
@@ -408,7 +410,7 @@ public class Gameplay : MonoBehaviour
                 checkpoints.Count +
                 "\nNext: " +
                 (currentCheckpointIndex + 1);
-            distanceString = "Distance: " + distanceToNextCheckpoint.ToString("0.0") + "m";
+            distanceString = "Distance: " + (distanceToNextCheckpoint * MetersToFeet).ToString("0.0") + "ft";
         }
 
         gameplayText.text =

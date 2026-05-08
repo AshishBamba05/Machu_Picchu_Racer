@@ -7,6 +7,8 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public class RaceTrackManager : MonoBehaviour
 {
+    private const float MetersToFeet = 3.28084f;
+
     private const float CheckpointReachRadiusMeters = 9.144f;
     private const float RespawnHeightOffset = 0f;
     private const float CountdownDuration = 3f;
@@ -874,7 +876,7 @@ public class RaceTrackManager : MonoBehaviour
         if (!raceFinished && checkpointPositions.Count > 0 && nextCheckpointIndex < checkpointPositions.Count && racer != null)
         {
             var distance = Vector3.Distance(racer.position, checkpointPositions[nextCheckpointIndex]);
-            distanceLine = $"Distance to next: {distance:0.0}m";
+            distanceLine = $"Distance to next: {distance * MetersToFeet:0.0}ft";
         }
 
         var countdownLine = countdownActive
@@ -912,7 +914,7 @@ public class RaceTrackManager : MonoBehaviour
         var checkpointsPassed = checkpoints.Count == 0
             ? 0
             : Mathf.Clamp(lastClearedCheckpointIndex + 1, 0, checkpoints.Count);
-        droneDistanceText.text = $"Next checkpoint: {distance:0.0}m   |   Passed: {checkpointsPassed}/{checkpoints.Count}";
+        droneDistanceText.text = $"Next checkpoint: {distance * MetersToFeet:0.0}ft   |   Passed: {checkpointsPassed}/{checkpoints.Count}";
         droneDistanceText.ForceMeshUpdate();
     }
 
