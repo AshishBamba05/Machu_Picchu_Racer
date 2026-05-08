@@ -19,6 +19,7 @@ public class GhostChampion : MonoBehaviour
     public class GhostRunData
     {
         public float totalTime;
+        public string trackSignature;
         public List<GhostFrame> frames = new List<GhostFrame>();
     }
 
@@ -45,6 +46,7 @@ public class GhostChampion : MonoBehaviour
     private float recordingStartTime;
     private float replayStartTime;
     private float nextSampleTime;
+    private string currentTrackSignature = string.Empty;
 
     private string SavePath
     {
@@ -86,6 +88,7 @@ public class GhostChampion : MonoBehaviour
         }
 
         currentRun = new GhostRunData();
+        currentRun.trackSignature = currentTrackSignature;
 
         recordingStartTime = Time.time;
         nextSampleTime = 0f;
@@ -106,6 +109,7 @@ public class GhostChampion : MonoBehaviour
         RecordFrame(finalRaceTime);
         isRecording = false;
         currentRun.totalTime = finalRaceTime;
+        currentRun.trackSignature = currentTrackSignature;
 
         bool noBestYet = bestRun == null || bestRun.frames == null || bestRun.frames.Count == 0;
         bool isNewBest = noBestYet || finalRaceTime < bestRun.totalTime;
@@ -160,6 +164,7 @@ public class GhostChampion : MonoBehaviour
         isRecording = false;
         isReplaying = false;
         currentRun = new GhostRunData();
+        currentRun.trackSignature = currentTrackSignature;
         lastRunWasNewBest = false;
 
         if (ghostDrone != null && hideGhostWhenNotPlaying)
@@ -266,6 +271,25 @@ public class GhostChampion : MonoBehaviour
         return lastRunWasNewBest;
     }
 
+    public void SetTrackSignature(string trackSignature)
+    {
+        currentTrackSignature = trackSignature ?? string.Empty;
+        currentRun.trackSignature = currentTrackSignature;
+
+        if (bestRun == null || bestRun.frames == null || bestRun.frames.Count == 0)
+            return;
+
+        if (DoTrackSignaturesMatch(bestRun.trackSignature, currentTrackSignature))
+            return;
+
+        LogDebug(
+            $"Saved ghost belongs to a different track. " +
+            $"Saved signature='{bestRun.trackSignature ?? "<none>"}', current signature='{currentTrackSignature}'.");
+
+        bestRun = null;
+        lastRunWasNewBest = false;
+    }
+
     private void RecordFrame(float timestamp)
     {
         if (playerDrone == null)
@@ -326,6 +350,17 @@ public class GhostChampion : MonoBehaviour
             return;
 
         Debug.Log($"[GhostChampion] {message}", this);
+    }
+
+    private static bool DoTrackSignaturesMatch(string savedSignature, string activeSignature)
+    {
+        if (string.IsNullOrEmpty(activeSignature))
+            return true;
+
+        if (string.IsNullOrEmpty(savedSignature))
+            return false;
+
+        return string.Equals(savedSignature, activeSignature, StringComparison.Ordinal);
     }
 
     private void CreateGhostPrimitive(

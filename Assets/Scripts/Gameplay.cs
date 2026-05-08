@@ -1,5 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Text;
 using UnityEngine;
 using TMPro;
 using UnityEngine.UI;
@@ -149,6 +151,8 @@ public class Gameplay : MonoBehaviour
                 checkpointComponents.Add(checkpoint);
             }
         }
+
+        ghostChampion?.SetTrackSignature(BuildTrackSignature());
     }
 
     private void SetupDroneAtStart()
@@ -581,6 +585,33 @@ public class Gameplay : MonoBehaviour
         return ghostChampion.WasLastRunNewBest()
             ? "Congrats new record"
             : "Fail to beat best record";
+    }
+
+    private string BuildTrackSignature()
+    {
+        if (checkpoints.Count == 0)
+            return string.Empty;
+
+        StringBuilder signatureBuilder = new StringBuilder(checkpoints.Count * 48);
+
+        for (int index = 0; index < checkpoints.Count; index++)
+        {
+            Transform checkpoint = checkpoints[index];
+            if (checkpoint == null)
+                continue;
+
+            Vector3 position = checkpoint.position;
+            signatureBuilder.Append(index);
+            signatureBuilder.Append(':');
+            signatureBuilder.Append(position.x.ToString("F3", CultureInfo.InvariantCulture));
+            signatureBuilder.Append(',');
+            signatureBuilder.Append(position.y.ToString("F3", CultureInfo.InvariantCulture));
+            signatureBuilder.Append(',');
+            signatureBuilder.Append(position.z.ToString("F3", CultureInfo.InvariantCulture));
+            signatureBuilder.Append(';');
+        }
+
+        return signatureBuilder.ToString();
     }
 
     private void LogGhostDebug(string message)
